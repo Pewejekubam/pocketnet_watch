@@ -57,7 +57,8 @@ get_debug_log() {
 
 # Function to display metrics
 display_metrics() {
-    tput civis # Hide the cursor trap 'tput cnorm; exit' INT TERM # Show the cursor on exit
+    tput civis # Hide the cursor
+    trap 'tput cnorm; exit' INT TERM # Show the cursor on exit
     printf "%-32s\n" "$(date +"%a %Y-%m-%d %H:%M:%S %Z")"
     printf "%-32s\n" "Wallet Address: $(get_highest_balance_address)"
     printf "%-32s | %-32s | %-32s\n" "Wallet Balance: $(get_wallet_info)" "Version: $(pocketcoin-cli -getinfo | jq -r '.version')" "Connections: $(pocketcoin-cli -getinfo | jq -r '.connections.total')"
@@ -71,6 +72,12 @@ display_metrics() {
     printf "%-32s\n" "Local Memory Usage:"
     get_memory_usage
     get_debug_log
+
+    # Display the last 4 lines of the probe_nodes.log if it exists
+    if [ -f "$HOME/probe_nodes/probe_nodes.log" ]; then
+        echo "--------------probe_nodes_log--------------"
+        tail -n 4 "$HOME/probe_nodes/probe_nodes.log"
+    fi
 }
 
 # Main loop
@@ -87,4 +94,3 @@ while true; do
     fi
 done
 
-pocketnet@pocketnet-node11:~$ 
