@@ -1,0 +1,40 @@
+{
+	"folders": [
+		{
+			"path": "../buns"
+		},
+		{
+			"path": "../fortinet"
+		},
+		{
+			"path": "../fresh-ubuntu"
+		},
+		{
+			"path": "../fresh-windows"
+		},
+		{
+			"path": "../gra-azure"
+		},
+		{
+			"path": "../mta"
+		},
+		{
+			"path": "../notes"
+		},
+		{
+			"path": "../pocketnet_create_checkpoint"
+		},
+		{
+			"path": "../pocketnet_priv"
+		},
+		{
+			"path": "../pocketnet_probe_nodes"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../ucs"
+		}
+	]
+}
