@@ -54,7 +54,7 @@ get_stake_time() {
 
 # Function to get staking info
 get_staking_info() {
-    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '"Netstakeweight: \(.netstakeweight)  | Expectedtime: \(.expectedtime)"'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '"Netstakeweight: \(.netstakeweight)  | Expectedtime: \(.expectedtime)        "'
 }
 
 # Function to get staking status
