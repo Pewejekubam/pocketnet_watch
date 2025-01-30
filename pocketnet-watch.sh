@@ -13,60 +13,63 @@
 # Timestamp: 2025-01-24 18:09:44
 # -----------------------------------------------------------------------------
 
+# Custom arguments for pocketcoin-cli
+# Note: This can be an empty string if no custom arguments are needed.
+POCKETCOIN_CLI_ARGS="-rpcport=67530 -conf=/path/to/pocketnet/pocketcoin.conf"
 
 # Function to get the highest balance address
 get_highest_balance_address() {
-    pocketcoin-cli listaddressgroupings | jq -r '.[0] | max_by(.[1]) | .[0]'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings | jq -r '.[0] | max_by(.[1]) | .[0]'
 }
 
 # Function to get wallet info
 get_wallet_info() {
-    pocketcoin-cli getwalletinfo | jq -r '.sql_balance'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo | jq -r '.sql_balance'
 }
 
 # Function to get node version
 get_node_version() {
-    pocketcoin-cli -getinfo | jq -r '.version'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo | jq -r '.version'
 }
 
 # Function to get connections
 get_connections() {
-    pocketcoin-cli -getinfo | jq -r '.connections.total'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo | jq -r '.connections.total'
 }
 
 # Function to get block info
 get_block_info() {
-    pocketcoin-cli -getinfo | jq -r '.blocks'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo | jq -r '.blocks'
 }
 
 # Function to get difficulty
 get_difficulty() {
-    pocketcoin-cli -getinfo | jq -r '.difficulty'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo | jq -r '.difficulty'
 }
 
 # Function to get stake time
 get_stake_time() {
-    pocketcoin-cli getstakinginfo | jq -r '.["stake-time"]'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '.["stake-time"]'
 }
 
 # Function to get staking info
 get_staking_info() {
-    pocketcoin-cli getstakinginfo | jq -r '"Netstakeweight: \(.netstakeweight)  | Expectedtime: \(.expectedtime)"'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '"Netstakeweight: \(.netstakeweight)  | Expectedtime: \(.expectedtime)"'
 }
 
 # Function to get staking status
 get_staking_status() {
-    pocketcoin-cli getstakinginfo | jq -r '.staking'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '.staking'
 }
 
 # Function to get last stake reward time
 get_last_stake_reward() {
-    pocketcoin-cli getstakereport | grep "Last stake time" | awk -F': ' '{print $2}'
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport | grep "Last stake time" | awk -F': ' '{print $2}'
 }
 
 # Function to get stake report
 get_stake_report() {
-    pocketcoin-cli getstakereport | head -n 7 | tail -n +2
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport | head -n 7 | tail -n +2
 }
 
 # Function to get memory usage
