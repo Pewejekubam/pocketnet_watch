@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # -----------------------------------------------------------------------------
 # Pocketnet Watch Script
 # -----------------------------------------------------------------------------
@@ -7,11 +8,12 @@
 # metrics and logs. It retrieves information such as wallet balance, node
 # version, connections, block info, staking info, and memory usage. The script
 # runs in a loop, updating the display every 5 seconds and clearing the screen
-# every 15 cycles. It also displays the last 4 lines of the probe_nodes.log
+# every 15 cycles. It also displays the last 5 lines of the probe_nodes.log
 # file if it exists.
 #
-# Timestamp: 2025-01-24 18:09:44
+# Timestamp: 2025-03-03 16:49 CST
 # -----------------------------------------------------------------------------
+
 
 # Custom arguments for pocketcoin-cli
 # Note: This can be an empty string if no custom arguments are needed.
@@ -82,11 +84,11 @@ get_debug_log() {
     tail -n 10 ~/.pocketcoin/debug.log
 }
 
-# Function to display the last 4 lines of the probe_nodes.log if it exists
+# Function to display the last 5 lines of the probe_nodes.log if it exists
 display_probe_nodes_log() {
     if [ -f "$HOME/probe_nodes/probe_nodes.log" ]; then
         echo "--------------probe_nodes_log--------------"
-        tail -n 4 "$HOME/probe_nodes/probe_nodes.log"
+        tail -n 5 "$HOME/probe_nodes/probe_nodes.log"
     fi
 }
 
