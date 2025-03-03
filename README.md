@@ -45,7 +45,7 @@ The Pocketnet Watch Script is a bash utility that continuously monitors and disp
 
 ## Screenshots
 
-*[Insert screenshot of the script running here]*
+*https://github.com/Pewejekubam/pocketnet_watch/blob/main/watch-screen-shot.png*
 
 ## Prerequisites
 
