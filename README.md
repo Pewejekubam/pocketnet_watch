@@ -20,6 +20,7 @@ To run the script, simply execute it in a terminal:
 
 ```bash
 ./pocketnet-watch.sh# Pocketnet Watch Script
+```
 
 A lightweight monitoring tool for Pocketnet nodes that provides real-time metrics and logs in your terminal.
 
@@ -45,7 +46,8 @@ The Pocketnet Watch Script is a bash utility that continuously monitors and disp
 
 ## Screenshots
 
-*https://github.com/Pewejekubam/pocketnet_watch/blob/main/watch-screen-shot.png*
+![Screenshot](https://github.com/Pewejekubam/pocketnet_watch/blob/main/watch-screen-shot.png)
+
 
 ## Prerequisites
 
