@@ -349,42 +349,44 @@ display_probe_nodes_log() {
 }
 
 # Helper function to create a boxed section
+# Helper function to create a boxed section with perfect alignment
 create_boxed_section() {
     local title="$1"
     shift
     local content=("$@")
     
-    # Find the maximum line length (considering title and content)
-    local max_length=0
-    local title_length=$((${#title} + 4)) # +4 for "─ " before and " " after title
-    
-    # Check title length
-    if [ $title_length -gt $max_length ]; then
-        max_length=$title_length
-    fi
-    
-    # Check content lines length
+    # Calculate the maximum content width
+    local max_content_width=0
     for line in "${content[@]}"; do
-        if [ ${#line} -gt $max_length ]; then
-            max_length=${#line}
+        if [ ${#line} -gt $max_content_width ]; then
+            max_content_width=${#line}
         fi
     done
     
-    # Add padding to max_length
-    max_length=$((max_length + 4)) # +4 for padding (2 spaces on each side)
+    # Calculate content line width including borders and padding
+    # Format: │ content_with_padding │
+    local full_line_width=$((max_content_width + 4)) # +4 for "│ " and " │"
+    
+    # Calculate internal width (without the border characters)
+    local internal_width=$((full_line_width - 2))
+    
+    # Create the title part
+    local title_part="─ $title "
+    
+    # Calculate remaining dashes needed after title
+    local remaining_dashes=$((internal_width - ${#title_part}))
     
     # Top border with title
-    printf "┌─ %s %s┐\n" "$title" "$(printf '─%.0s' $(seq 1 $((max_length - title_length))))"
+    printf "┌%s%s┐\n" "$title_part" "$(printf '─%.0s' $(seq 1 $remaining_dashes))"
     
     # Content lines
     for line in "${content[@]}"; do
-        printf "│ %-$((max_length - 2))s │\n" "$line"
+        printf "│ %-${max_content_width}s │\n" "$line"
     done
     
-    # Bottom border
-    printf "└%s┘\n" "$(printf '─%.0s' $(seq 1 $max_length))"
+    # Bottom border - exactly matching the top border width
+    printf "└%s┘\n" "$(printf '─%.0s' $(seq 1 $internal_width))"
 }
-
 # Function to display boxed UI
 display_boxed_ui() {
     # Node Status Box
