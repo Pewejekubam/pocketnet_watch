@@ -7,7 +7,7 @@
 # wallet balance, node status, blockchain details, staking info, and system
 # resources.
 #
-# Timestamp: 2025-03-11
+# Timestamp: 2025-03-18
 # -----------------------------------------------------------------------------
 # Custom arguments for pocketcoin-cli
 # Note: This can be an empty string if no custom arguments are needed.
@@ -17,7 +17,7 @@ POCKETCOIN_CLI_ARGS=""
 USE_BOXED_UI=true     # Set to false for non-boxed UI
 REFRESH_SECONDS=5     # Time between screen refreshes
 CLEAR_CYCLES=15       # Clear screen every N cycles
-BOX_PADDING=2         # Padding inside UI boxes
+# BOX_PADDING=2         # Padding inside UI boxes
 DEFAULT_BOX_WIDTH=80  # Default width for UI boxes
 
 # Check for jq installation
@@ -349,7 +349,6 @@ display_probe_nodes_log() {
 }
 
 # Helper function to create a boxed section
-# Helper function to create a boxed section with perfect alignment
 create_boxed_section() {
     local title="$1"
     shift
@@ -363,8 +362,7 @@ create_boxed_section() {
         fi
     done
     
-    # Calculate content line width including borders and padding
-    # Format: │ content_with_padding │
+    # Calculate content line width including borders
     local full_line_width=$((max_content_width + 4)) # +4 for "│ " and " │"
     
     # Calculate internal width (without the border characters)
@@ -490,7 +488,6 @@ display_help() {
     echo "  -c, --compact     Use compact UI without boxes"
     echo "  -r, --refresh N   Set refresh interval to N seconds (default: 5)"
     echo "  --clear N         Clear screen every N cycles (default: 15)"
-    echo "  --box-padding N   Set padding inside UI boxes (default: 2)"
     echo "  --box-width N     Set default width for UI boxes (default: 80)"
     echo ""
     echo "Press Ctrl+C to exit"
@@ -524,7 +521,6 @@ while [[ "$#" -gt 0 ]]; do
         -c|--compact) USE_BOXED_UI=false ;;
         -r|--refresh) REFRESH_SECONDS="$2"; shift ;;
         --clear) CLEAR_CYCLES="$2"; shift ;;
-        --box-padding) BOX_PADDING="$2"; shift ;;
         --box-width) DEFAULT_BOX_WIDTH="$2"; shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
