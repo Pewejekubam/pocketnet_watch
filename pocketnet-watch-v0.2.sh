@@ -113,13 +113,20 @@ get_sync_status() {
 # Function to get difficulty
 get_difficulty() {
     local diff=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo | jq -r '.difficulty' || echo "Unknown")
-    # Format difficulty based on size
-    if (( $(echo "$diff > 1000000" | bc -l) )); then
-        printf "%.2fM" $(echo "$diff/1000000" | bc -l)
-    elif (( $(echo "$diff > 1000" | bc -l) )); then
-        printf "%.2fK" $(echo "$diff/1000" | bc -l)
+    
+    # Check if we got a valid number
+    if [[ -n "$diff" && "$diff" != "Unknown" ]]; then
+        # Split at decimal point
+        local diff_integer=$(echo "$diff" | cut -d'.' -f1)
+        local diff_decimal=$(echo "$diff" | cut -d'.' -f2 | cut -c1-6)  # Take first 6 decimal places
+        
+        # Add commas to integer part
+        local formatted_diff_integer=$(printf "%'d" $diff_integer)
+        
+        # Combine back with decimal portion
+        printf "%s.%s" "$formatted_diff_integer" "$diff_decimal"
     else
-        printf "%.2f" $diff
+        echo "Unknown"
     fi
 }
 
@@ -158,39 +165,39 @@ get_staking_info() {
     local weight=$(echo "$info" | jq -r '.weight')
     local netweight=$(echo "$info" | jq -r '.netstakeweight')
     local expected=$(echo "$info" | jq -r '.expectedtime')
-    # Format weight
-    local formatted_weight
-    if (( weight > 1000000 )); then
-        formatted_weight=$(echo "scale=2; $weight/1000000" | bc)
-        formatted_weight="${formatted_weight}M"
-    elif (( weight > 1000 )); then
-        formatted_weight=$(echo "scale=2; $weight/1000" | bc)
-        formatted_weight="${formatted_weight}K"
-    else
-        formatted_weight=$weight
-    fi
-    # Format net weight
-    local formatted_netweight
-    if (( netweight > 1000000 )); then
-        formatted_netweight=$(echo "scale=2; $netweight/1000000" | bc)
-        formatted_netweight="${formatted_netweight}M"
-    elif (( netweight > 1000 )); then
-        formatted_netweight=$(echo "scale=2; $netweight/1000" | bc)
-        formatted_netweight="${formatted_netweight}K"
-    else
-        formatted_netweight=$netweight
-    fi
+    
+    # Convert satoshis to coins (1 coin = 100,000,000 satoshis)
+    local coins_weight=$(echo "scale=8; $weight/100000000" | bc)
+    local coins_netweight=$(echo "scale=8; $netweight/100000000" | bc)
+    
+    # Format with commas left of decimal point
+    # First, split at decimal point
+    local weight_integer=$(echo "$coins_weight" | cut -d'.' -f1)
+    local weight_decimal=$(echo "$coins_weight" | cut -d'.' -f2)
+    local netweight_integer=$(echo "$coins_netweight" | cut -d'.' -f1)
+    local netweight_decimal=$(echo "$coins_netweight" | cut -d'.' -f2)
+    
+    # Add commas to integers with printf
+    local formatted_weight_integer=$(printf "%'d" $weight_integer)
+    local formatted_netweight_integer=$(printf "%'d" $netweight_integer)
+    
+    # Combine back with decimal portion
+    local formatted_weight="${formatted_weight_integer}.${weight_decimal}"
+    local formatted_netweight="${formatted_netweight_integer}.${netweight_decimal}"
+    
     # Calculate percentage
     local percentage=0
-    if (( netweight > 0 )); then
+    if (( $(echo "$netweight > 0" | bc -l) )); then
         percentage=$(echo "scale=2; ($weight * 100) / $netweight" | bc)
     fi
+    
     # Format status
     if [[ "$status" == "true" ]]; then
         status="ACTIVE"
     else
         status="INACTIVE"
     fi
+    
     # Format expected time
     local formatted_expected
     if (( expected > 86400 )); then
@@ -207,36 +214,43 @@ get_staking_info() {
     else
         formatted_expected="unknown"
     fi
+    
     echo "$status | Weight: $formatted_weight/$formatted_netweight ($percentage%) | Next: ~$formatted_expected"
 }
-
 # Function to get last stake reward time
 get_last_stake_reward() {
-    local last_stake=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null | grep "Last stake time" | awk -F': ' '{print $2}')
-    if [[ -z "$last_stake" || "$last_stake" == "0" ]]; then
+    local last_stake_time=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null | grep "Latest Time" | awk -F': ' '{print $2}' | tr -d '",' )
+    
+    if [[ -z "$last_stake_time" || "$last_stake_time" == "0" ]]; then
         echo "Never"
         return
     fi
+    
+    # Convert ISO 8601 date format to Unix timestamp
+    local last_stake_ts=$(date -d "$last_stake_time" +%s)
     local now=$(date +%s)
-    local diff=$((now - last_stake))
+    local diff=$((now - last_stake_ts))
     format_time_difference $diff
 }
 
-# Function to get network stake weight
+# Function to get net stake weight
 get_net_stake_weight() {
     local info=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo 2>/dev/null)
     local netweight=$(echo "$info" | jq -r '.netstakeweight')
     
-    # Format net weight
-    if (( netweight > 1000000000 )); then
-        printf "%.2fB" $(echo "$netweight/1000000000" | bc -l)
-    elif (( netweight > 1000000 )); then
-        printf "%.2fM" $(echo "$netweight/1000000" | bc -l)
-    elif (( netweight > 1000 )); then
-        printf "%.2fK" $(echo "$netweight/1000" | bc -l)
-    else
-        echo "$netweight"
-    fi
+    # Convert satoshis to coins (1 coin = 100,000,000 satoshis)
+    local coins_netweight=$(echo "scale=8; $netweight/100000000" | bc)
+    
+    # Format with commas left of decimal point
+    # Split at decimal point
+    local netweight_integer=$(echo "$coins_netweight" | cut -d'.' -f1)
+    local netweight_decimal=$(echo "$coins_netweight" | cut -d'.' -f2)
+    
+    # Add commas to integer with printf
+    local formatted_netweight_integer=$(printf "%'d" $netweight_integer)
+    
+    # Combine back with decimal portion
+    echo "${formatted_netweight_integer}.${netweight_decimal}"
 }
 
 # Function to get memory usage information (compact version)
@@ -274,22 +288,23 @@ get_free_memory() {
 # Function to get stake report
 get_stake_report() {
     local report=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null)
-    local last24=$(echo "$report" | grep "Last 24h" | awk -F': ' '{print $2}' || echo "0")
-    local last7d=$(echo "$report" | grep "Last 7 days" | awk -F': ' '{print $2}' || echo "0")
-    local last30d=$(echo "$report" | grep "Last 30 days" | awk -F': ' '{print $2}' || echo "0")
-    local total=$(echo "$report" | grep "Total" | awk -F': ' '{print $2}' || echo "0")
-    local count=$(echo "$report" | grep "All stake rewards" | awk -F': ' '{print $2}' || echo "0")
+    
+    # Extract data using jq instead of grep since we're working with JSON
+    local last24=$(echo "$report" | jq -r '."Last 24H"' || echo "0")
+    local last7d=$(echo "$report" | jq -r '."Last 7 Days"' || echo "0")
+    local last30d=$(echo "$report" | jq -r '."Last 30 Days"' || echo "0")
+    local last365d=$(echo "$report" | jq -r '."Last 365 Days"' || echo "0")
+    local count=$(echo "$report" | jq -r '."Stake counted"' || echo "0")
 
     # Ensure the values are explicitly set to 0 if empty
     last24=${last24:-0}
     last7d=${last7d:-0}
     last30d=${last30d:-0}
-    total=${total:-0}
+    last365d=${last365d:-0}
     count=${count:-0}
 
-    echo "24h: $last24 | 7d: $last7d | 30d: $last30d | Total: $total | Count: $count"
+    echo "24h: $last24 | 7d: $last7d | 30d: $last30d | 365d: $last365d | Count: $count"
 }
-
 # Function to get node uptime
 get_node_uptime() {
     local uptime_seconds=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS uptime 2>/dev/null || echo "0")
@@ -394,7 +409,7 @@ display_boxed_ui() {
     create_boxed_section "Node Status" "$node_status"
     
     # Blockchain Box
-    blockchain_line1=$(printf "Blocks: %-10s | Diff: %-10s | Hash: %-20s" \
+    blockchain_line1=$(printf "Blocks: %-10s | Difficulty: %-10s | Hash: %-20s" \
            "$(get_block_info)" "$(get_difficulty)" "$(get_network_hashps)")
     blockchain_line2=$(printf "Mempool: %-30s | NetStakeWeight: %-28s" \
            "$(get_mempool_info)" "$(get_net_stake_weight)")
@@ -443,7 +458,7 @@ display_compact_ui() {
            "Conns: $(get_connections_details)" "Sync: $(get_sync_status)" "Up: $(get_node_uptime)"
     # Blockchain info
     printf "%-20s | %-18s | %-21s | %s\n" \
-           "Blocks: $(get_block_info)" "Diff: $(get_difficulty)" \
+           "Blocks: $(get_block_info)" "Difficulty: $(get_difficulty)" \
            "Hash: $(get_network_hashps)" "Mempool: $(get_mempool_info)"
     # Wallet info
     local addr=$(get_highest_balance_address)
