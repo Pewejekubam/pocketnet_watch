@@ -25,14 +25,15 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-# Function to get the highest balance address
-get_highest_balance_address() {
-    pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings | jq -r '.[0] | max_by(.[1]) | .[0]' || echo "Unknown"
+# Function to get wallet balance using sql_balance
+get_wallet_balance() {
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo | jq -r '.sql_balance' || echo "Unknown"
 }
 
-# Function to get wallet info
+# Function to get wallet info (updated to use get_wallet_balance)
 get_wallet_info() {
-    pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo | jq -r '.balance' || echo "Unknown"
+    local balance=$(get_wallet_balance)
+    printf "%.8f" "$balance"
 }
 
 # Function to get unconfirmed balance
