@@ -4,56 +4,31 @@ This script monitors the status of a Pocketnet node by displaying various metric
 
 ## Features
 
-- Displays the current date and time.
-- Shows the wallet address with the highest balance.
-- Displays wallet balance, node version, and number of connections.
-- Shows the current block height and difficulty.
-- Displays staking information, including stake time, net stake weight, and expected time.
-- Shows the staking status and a staking report.
-- Displays local memory usage.
-- Shows the last 10 lines of the Pocketnet debug log.
-- Displays the last 4 lines of the `probe_nodes.log` file if it exists.
-
-## Usage
-
-To run the script, simply execute it in a terminal:
-
-```bash
-./pocketnet-watch.sh# Pocketnet Watch Script
-```
-
-A lightweight monitoring tool for Pocketnet nodes that provides real-time metrics and logs in your terminal.
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-green.svg)
-
-## Overview
-
-The Pocketnet Watch Script is a bash utility that continuously monitors and displays essential information about your Pocketnet node. It provides a dashboard with metrics such as wallet balance, node connections, block information, staking status, and system memory usage - all updated in real-time.
-
-## Features
-
-- **Real-time Monitoring**: Updates every 5 seconds with a screen refresh every 15 cycles
-- **Comprehensive Metrics**:
-  - Current wallet address and balance
-  - Node version and connection count
-  - Block height and network difficulty
-  - Detailed staking information and statistics
-  - System memory usage
-- **Log Integration**: Displays the most recent entries from debug and probe logs
-- **Lightweight**: Minimal system resource usage
-- **Easy to Configure**: Simple setup with customizable parameters
-
-## Screenshots
-
-![Screenshot](https://github.com/Pewejekubam/pocketnet_watch/blob/main/watch-screen-shot.png)
-
+- **Enhanced Metrics**:
+  - Wallet balance, unconfirmed balance, and staking details.
+  - Node version, network type, and connection details (inbound/outbound).
+  - Blockchain sync status, block height, headers, and difficulty.
+  - Network hashrate and mempool information.
+  - System resource usage (CPU, memory, disk, and swap).
+  - Stake reports (last 24h, 7d, 30d, 365d) and staking weight percentages.
+- **Improved UI**:
+  - Boxed UI for better readability (optional compact mode available).
+  - Dynamic formatting with commas and decimal precision for numbers.
+  - Clear screen every configurable number of cycles.
+- **Log Integration**:
+  - Displays the last 5 lines of the debug log.
+  - Includes the last 3 lines of `probe_nodes.log` if available.
+- **Additional Features**:
+  - Displays the highest balance wallet address.
+  - Shows node uptime and system load averages.
+  - Provides formatted time differences for staking and uptime metrics.
+  - Retrieves staking info, including expected time for the next reward.
 
 ## Prerequisites
 
-- A running Pocketnet node
-- `jq` for JSON parsing
-- `pocketcoin-cli` configured and accessible in your PATH
+- A running Pocketnet node.
+- `jq` for JSON parsing.
+- `pocketcoin-cli` configured and accessible in your PATH.
 
 ## Installation
 
@@ -65,58 +40,69 @@ The Pocketnet Watch Script is a bash utility that continuously monitors and disp
 
 2. Make the script executable:
    ```bash
-   chmod +x watch.sh
+   chmod +x pocketnet-watch.sh
    ```
 
-3. Configure the script by editing the `POCKETCOIN_CLI_ARGS` variable to match your setup.  You can leave this blank if you don't need any runtime arguments.  If you prefer, you can just argue with Snowflakecrusher:
+3. Configure the script by editing the `POCKETCOIN_CLI_ARGS` variable to match your setup:
    ```bash
    # Edit this line if needed
-   POCKETCOIN_CLI_ARGS="-rpcport=67530 -conf=/path/to/pocketnet/pocketcoin.conf"
+   POCKETCOIN_CLI_ARGS="-rpcport=67530 -conf=/path/to/pocketcoin.conf"
    ```
+   If no custom arguments are required, you can leave this variable empty (`""`), which is the default setting.
 
 ## Usage
 
-Simply run the script from your terminal:
+Run the script from your terminal:
 
 ```bash
-./watch.sh
+./pocketnet-watch.sh
 ```
+
+### Command-Line Options
+
+- `-h, --help`: Display help message.
+- `-b, --boxed`: Use boxed UI (default).
+- `-c, --compact`: Use compact UI without boxes.
+- `-r, --refresh N`: Set refresh interval to N seconds (default: 5).
+- `--clear N`: Clear screen every N cycles (default: 15).
 
 To exit the monitoring, press `Ctrl+C`.
 
 ## Configuration
 
-The script uses a single configuration variable:
+The script uses the following configuration variables:
 
-- `POCKETCOIN_CLI_ARGS`: Command-line arguments passed to `pocketcoin-cli`
-  - Set your custom RPC port and configuration file path here
-  - Leave empty if using default values
+- `POCKETCOIN_CLI_ARGS`: Command-line arguments passed to `pocketcoin-cli`.
+- `USE_BOXED_UI`: Set to `true` for boxed UI or `false` for compact UI.
+- `REFRESH_SECONDS`: Time between screen refreshes (default: 5 seconds).
+- `CLEAR_CYCLES`: Number of cycles before clearing the screen (default: 15).
 
 ## Functions
 
-The script includes several functions for retrieving different types of information:
+The script includes several functions for retrieving and displaying metrics:
 
 | Function | Description |
 |----------|-------------|
-| `get_highest_balance_address()` | Retrieves the address with the highest balance |
-| `get_wallet_info()` | Gets current wallet balance |
-| `get_node_version()` | Retrieves the Pocketnet node version |
-| `get_connections()` | Gets the number of connections to other nodes |
-| `get_block_info()` | Retrieves current block height |
-| `get_difficulty()` | Gets current network difficulty |
-| `get_stake_time()` | Retrieves stake time information |
-| `get_staking_info()` | Gets detailed staking metrics |
-| `get_staking_status()` | Checks if staking is currently active |
-| `get_memory_usage()` | Displays system memory usage |
-| `get_debug_log()` | Shows recent debug log entries |
+| `get_wallet_balance()` | Retrieves wallet balance with formatting. |
+| `get_node_version()` | Retrieves the Pocketnet node version. |
+| `get_connections_details()` | Displays total, inbound, and outbound connections. |
+| `get_sync_status()` | Shows blockchain sync percentage. |
+| `get_staking_info()` | Provides detailed staking metrics. |
+| `get_debug_log()` | Displays the last 5 lines of the debug log. |
+| `get_system_uptime()` | Retrieves system uptime. |
+| `get_disk_usage()` | Displays disk usage for the blockchain directory. |
+
+## Screenshots
+
+![Screenshot](https://github.com/Pewejekubam/pocketnet_watch/blob/main/watch-screen-shot.png)
 
 ## Extending the Script
 
 You can easily extend the script to include additional metrics:
 
-1. Create a new function to retrieve the desired information
-2. Add the function call to the `display_metrics()` function
-3. Format the output as needed using `printf`
+1. Create a new function to retrieve the desired information.
+2. Add the function call to the `display_metrics()` function.
+3. Format the output as needed using `printf`.
 
 Example of adding a new metric:
 
@@ -134,20 +120,20 @@ printf "%-32s\n" "New Metric: $(get_new_metric)"
 
 If you encounter issues:
 
-- Ensure `pocketcoin-cli` is properly installed and in your PATH
-- Verify that `jq` is installed (`apt-get install jq` or `brew install jq`)
-- Check the RPC port and configuration file path in `POCKETCOIN_CLI_ARGS`
-- Make sure your Pocketnet node is running
+- Ensure `pocketcoin-cli` is properly installed and in your PATH.
+- Verify that `jq` is installed (`apt-get install jq` or `brew install jq`).
+- Check the RPC port and configuration file path in `POCKETCOIN_CLI_ARGS`.
+- Make sure your Pocketnet node is running.
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m 'Add some amazing feature'`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
 
 ## License
 
@@ -155,5 +141,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgements
 
-- The Pocketnet community
-- Contributors to the jq project
+- The Pocketnet community.
+- Contributors to the jq project.
