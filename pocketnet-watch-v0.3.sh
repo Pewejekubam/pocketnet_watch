@@ -445,17 +445,12 @@ get_load_averages() {
     uptime | awk -F'load average: ' '{print $2}'
 }
 
-# Function to get current UTC time
-get_utc_time() {
-    date -u +"%Y-%m-%d %H:%M:%S UTC"
-}
-
 # Function to display boxed UI
 display_boxed_ui() {
     # Node Status Box
-    node_status=$(printf "Node: v%-8s | Net: %-8s | Conns: %-14s | Sync: %-6s | Uptime: %-8s | UTC: %-20s" \
+    node_status=$(printf "Node: v%-8s | Net: %-8s | Conns: %-14s | Sync: %-6s | Uptime: %-8s" \
            "$(get_node_version)" "$(get_network_type)" "$(get_connections_details)" \
-           "$(get_sync_status)" "$(get_node_uptime)" "$(get_utc_time)")
+           "$(get_sync_status)" "$(get_node_uptime)")
     create_boxed_section "Node Status" "$node_status"
     
     # Blockchain Box

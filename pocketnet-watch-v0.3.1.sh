@@ -468,17 +468,18 @@ display_boxed_ui() {
     # Wallet Box
     local balance=$(get_wallet_balance)
     local highest_address=$(get_highest_balance_address)
+    local stake_count=$(get_stake_report | grep -o "Count:.*" | cut -d' ' -f2)
     wallet_status=$(printf "Addr: %-34s | sql_balance: %-12s | Unconf: %-10s" \
            "$highest_address" "$balance" "$(get_unconfirmed_balance)")
-    wallet_status2=$(printf "Status: %-72s" \
-           "$(get_wallet_status)")
+    wallet_status2=$(printf "Status: %-50s | Count: %-10s" \
+           "$(get_wallet_status)" "$stake_count")
     create_boxed_section "Wallet" "$wallet_status" "$wallet_status2"
     
     # Staking Box - show values even if zero
     staking_line1=$(printf "%-56s | Last: %-8s" \
            "$(get_staking_info || echo '0')" "$(get_last_stake_reward || echo '0')")
     staking_line2=$(printf "%-72s" \
-           "$(get_stake_report || echo '0')")
+           "$(get_stake_report | sed 's/| Count:.*//')")
     create_boxed_section "Staking" "$staking_line1" "$staking_line2"
     
     # System Resources Box - updated memory labels
