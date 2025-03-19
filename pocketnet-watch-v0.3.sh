@@ -290,9 +290,9 @@ get_free_memory() {
     if [ -n "$mem_available" ] && [ -n "$mem_free" ]; then
         local avail_mb=$(echo "scale=2; $mem_available/1024" | bc)
         local free_mb=$(echo "scale=2; $mem_free/1024" | bc)
-        echo "Avail: ${avail_mb} MiB, Free: ${free_mb} MiB"
+        echo "Usable: ${avail_mb} MiB | Unused: ${free_mb} MiB"
     else
-        echo "Unknown"
+        echo "Memory Metrics: Unavailable"
     fi
 }
 
@@ -374,6 +374,24 @@ display_probe_nodes_log() {
     fi
 }
 
+# Function to get the highest balance wallet address
+get_highest_balance_address() {
+    local addresses=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings 2>/dev/null)
+    local highest_balance=0
+    local highest_address="Unknown"
+    
+    while read -r entry; do
+        local address=$(echo "$entry" | jq -r '.[0]')
+        local balance=$(echo "$entry" | jq -r '.[1]')
+        if (( $(echo "$balance > $highest_balance" | bc -l) )); then
+            highest_balance=$balance
+            highest_address=$address
+        fi
+    done < <(echo "$addresses" | jq -c '.[][]')
+    
+    echo "$highest_address"
+}
+
 # Helper function to create a boxed section
 create_boxed_section() {
     local title="$1"
@@ -427,10 +445,10 @@ display_boxed_ui() {
     create_boxed_section "Blockchain" "$blockchain_line1" "$blockchain_line2"
     
     # Wallet Box
-    local addr=$(get_highest_balance_address)
-    # Show full address instead of truncating
-    wallet_status=$(printf "Addr: %-42s | Balance: %-12s | Unconf: %-10s" \
-           "$addr" "$(get_wallet_info)" "$(get_unconfirmed_balance)")
+    local balance=$(get_wallet_balance)
+    local highest_address=$(get_highest_balance_address)
+    wallet_status=$(printf "Addr: %-34s | sql_balance: %-12s | Unconf: %-10s" \
+           "$highest_address" "$balance" "$(get_unconfirmed_balance)")
     wallet_status2=$(printf "Status: %-72s" \
            "$(get_wallet_status)")
     create_boxed_section "Wallet" "$wallet_status" "$wallet_status2"
@@ -442,11 +460,11 @@ display_boxed_ui() {
            "$(get_stake_report || echo '0')")
     create_boxed_section "Staking" "$staking_line1" "$staking_line2"
     
-    # System Resources Box - added memory info
+    # System Resources Box - updated memory labels
     memory_info=$(get_memory_usage_info)
     system_resources=$(printf "Disk: %-20s | CPU: %-10s | Mem: %-20s" \
            "$(get_disk_usage)" "$(get_cpu_usage)" "$memory_info")
-    system_resources2=$(printf "Page Size: %-20s | Free Mem: %-30s" \
+    system_resources2=$(printf "Page Size: %-20s | Memory: %-30s" \
            "$(get_page_size)" "$(get_free_memory)")
     create_boxed_section "System Resources" "$system_resources" "$system_resources2"
     
