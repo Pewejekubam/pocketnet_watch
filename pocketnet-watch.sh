@@ -27,10 +27,16 @@ USE_BOXED_UI=true     # Set to false for non-boxed UI
 REFRESH_SECONDS=5     # Time between screen refreshes
 CLEAR_CYCLES=15       # Clear screen every N cycles
 DEFAULT_BOX_WIDTH=80  # Default width for UI boxes
+PROBE_NODES_LOG_PATH="${HOME}/probe_nodes/probe_nodes.log" # Path to the probe_nodes.log file
 
-# Check for jq installation
+# Check for jq and bc installation
 if ! command -v jq &> /dev/null; then
     echo "jq could not be found. Please install jq."
+    exit 1
+fi
+
+if ! command -v bc &> /dev/null; then
+    echo "bc could not be found. Please install bc."
     exit 1
 fi
 
@@ -40,19 +46,39 @@ format_with_commas() {
     printf "%'d" "$number"
 }
 
-# Function to get wallet balance using sql_balance
-get_wallet_balance() {
-    local sql_balance=$(echo "$WALLET_INFO" | jq -r '.sql_balance' || echo "0")
-    
-    # Format balance with commas and 8 decimal places
-    if [[ -n "$sql_balance" && "$sql_balance" != "0" ]]; then
+# Function to parse wallet balance
+parse_wallet_balance() {
+    echo "$WALLET_INFO" | jq -r '.sql_balance' || echo "0"
+}
+
+# Function to calculate wallet balance
+calculate_wallet_balance() {
+    local sql_balance="$1"
+    if [[ -z "$sql_balance" || "$sql_balance" == "null" || "$sql_balance" == "0" ]]; then
+        echo "0 00000000"
+    else
         local balance_integer=$(echo "$sql_balance" | cut -d'.' -f1)
         local balance_decimal=$(echo "$sql_balance" | cut -d'.' -f2)
-        local formatted_integer=$(format_with_commas $balance_integer)
-        echo "${formatted_integer}.${balance_decimal}"
-    else
-        echo "0.00000000"
+        balance_decimal=${balance_decimal:-"00000000"} # Ensure at least 8 decimal places
+        echo "$balance_integer $balance_decimal"
     fi
+}
+
+# Function to format wallet balance
+format_wallet_balance() {
+    local balance_integer="$1"
+    local balance_decimal="$2"
+    local formatted_integer=$(format_with_commas "$balance_integer")
+    echo "${formatted_integer}.${balance_decimal}"
+}
+
+# Refactored function to get wallet balance
+get_wallet_balance() {
+    local sql_balance=$(parse_wallet_balance)
+    local balance_parts=$(calculate_wallet_balance "$sql_balance")
+    local balance_integer=$(echo "$balance_parts" | awk '{print $1}')
+    local balance_decimal=$(echo "$balance_parts" | awk '{print $2}')
+    format_wallet_balance "$balance_integer" "$balance_decimal"
 }
 
 # Function to get wallet info
@@ -65,8 +91,8 @@ get_unconfirmed_balance() {
     echo "$WALLET_INFO" | jq -r '.unconfirmed_balance' || echo "0"
 }
 
-# Function to get wallet status (encrypted/locked/unlocked)
-get_wallet_status() {
+# Function to calculate wallet status
+calculate_wallet_status() {
     if [[ $(echo "$WALLET_INFO" | jq -r 'has("unlocked_until")') == "true" ]]; then
         local unlock_time=$(echo "$WALLET_INFO" | jq -r '.unlocked_until')
         if [[ $unlock_time == "0" ]]; then
@@ -85,6 +111,12 @@ get_wallet_status() {
     fi
 }
 
+# Function to format wallet status
+get_wallet_status() {
+    local status=$(calculate_wallet_status)
+    echo "$status"
+}
+
 # Function to get node version
 get_node_version() {
     echo "$GETINFO" | jq -r '.version' || echo "Unknown"
@@ -95,12 +127,27 @@ get_network_type() {
     echo "$NETWORK_INFO" | jq -r '.networkactive' | grep -q "true" && echo "Mainnet" || echo "Unknown"
 }
 
-# Function to get connections details
-get_connections_details() {
-    local total=$(echo "$NETWORK_INFO" | jq -r '.connections // 0')
-    local inbound=$(echo "$NETWORK_INFO" | jq -r '.connections_in // 0')
-    local outbound=$(echo "$NETWORK_INFO" | jq -r '.connections_out // 0')
+# Function to calculate connections details
+calculate_connections_details() {
+    local total=$(echo "$NETWORK_INFO" | jq -r '.connections // 0' 2>/dev/null || echo "0")
+    local inbound=$(echo "$NETWORK_INFO" | jq -r '.connections_in // 0' 2>/dev/null || echo "0")
+    local outbound=$(echo "$NETWORK_INFO" | jq -r '.connections_out // 0' 2>/dev/null || echo "0")
+    echo "$total $inbound $outbound"
+}
+
+# Function to format connections details
+format_connections_details() {
+    local details="$1"
+    local total=$(echo "$details" | awk '{print $1}')
+    local inbound=$(echo "$details" | awk '{print $2}')
+    local outbound=$(echo "$details" | awk '{print $3}')
     echo "$total ($inbound↓/$outbound↑)"
+}
+
+# Refactored function to get connections details
+get_connections_details() {
+    local details=$(calculate_connections_details)
+    format_connections_details "$details"
 }
 
 # Function to get block info
@@ -115,63 +162,139 @@ get_blockchain_info() {
     echo "$blocks | $headers"
 }
 
-# Function to get sync status
-get_sync_status() {
+# Function to parse sync data
+parse_sync_data() {
     local blocks=$(echo "$BLOCKCHAIN_INFO" | jq -r '.blocks // 0')
     local headers=$(echo "$BLOCKCHAIN_INFO" | jq -r '.headers // 0')
+    echo "$blocks $headers"
+}
+
+# Function to calculate sync percentage
+calculate_sync_percentage() {
+    local blocks="$1"
+    local headers="$2"
     if [[ $headers -eq 0 || $blocks -eq 0 ]]; then
         echo "Unknown"
     elif [[ $blocks -lt $headers ]]; then
-        local percent=$(( (blocks * 100) / headers ))
-        echo "$percent%"
+        echo $(( (blocks * 100) / headers ))
     else
-        echo "100%"
+        echo "100"
     fi
 }
 
-# Function to get difficulty
-get_difficulty() {
-    local diff=$(echo "$GETINFO" | jq -r '.difficulty' || echo "Unknown")
-    
-    # Check if we got a valid number
+# Function to format sync status
+format_sync_status() {
+    local percentage="$1"
+    if [[ "$percentage" == "Unknown" ]]; then
+        echo "Unknown"
+    else
+        echo "$percentage%"
+    fi
+}
+
+# Refactored function to get sync status
+get_sync_status() {
+    local sync_data=$(parse_sync_data)
+    local blocks=$(echo "$sync_data" | awk '{print $1}')
+    local headers=$(echo "$sync_data" | awk '{print $2}')
+    local percentage=$(calculate_sync_percentage "$blocks" "$headers")
+    format_sync_status "$percentage"
+}
+
+# Function to parse difficulty
+parse_difficulty() {
+    echo "$GETINFO" | jq -r '.difficulty' || echo "Unknown"
+}
+
+# Function to calculate difficulty
+calculate_difficulty() {
+    local diff="$1"
     if [[ -n "$diff" && "$diff" != "Unknown" ]]; then
-        # Split at decimal point
         local diff_integer=$(echo "$diff" | cut -d'.' -f1)
-        local diff_decimal=$(echo "$diff" | cut -d'.' -f2 | cut -c1-6)  # Take first 6 decimal places
-        
-        # Add commas to integer part
-        local formatted_diff_integer=$(format_with_commas $diff_integer)
-        
-        # Combine back with decimal portion
-        printf "%s.%s" "$formatted_diff_integer" "$diff_decimal"
+        local diff_decimal=$(echo "$diff" | cut -d'.' -f2 | cut -c1-6)
+        echo "$diff_integer $diff_decimal"
     else
         echo "Unknown"
     fi
 }
 
-# Function to get network hashrate
-get_network_hashps() {
-    local hashps=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getnetworkhashps 2>/dev/null || echo "0")
-    # Ensure hashps is treated as a floating-point number
-    if (( $(echo "$hashps > 1000000000000" | bc -l) )); then
+# Function to format difficulty
+format_difficulty() {
+    local diff_integer="$1"
+    local diff_decimal="$2"
+    if [[ "$diff_integer" == "Unknown" ]]; then
+        echo "Unknown"
+    else
+        local formatted_diff_integer=$(format_with_commas "$diff_integer")
+        echo "${formatted_diff_integer}.${diff_decimal}"
+    fi
+}
+
+# Refactored function to get difficulty
+get_difficulty() {
+    local diff=$(parse_difficulty)
+    local diff_parts=$(calculate_difficulty "$diff")
+    local diff_integer=$(echo "$diff_parts" | awk '{print $1}')
+    local diff_decimal=$(echo "$diff_parts" | awk '{print $2}')
+    format_difficulty "$diff_integer" "$diff_decimal"
+}
+
+# Function to parse network hashrate
+parse_network_hashps() {
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS getnetworkhashps 2>/dev/null || echo "0"
+}
+
+# Function to format network hashrate
+format_network_hashps() {
+    local hashps="$1"
+    if [ "$(echo "$hashps > 1000000000000" | bc -l)" -eq 1 ]; then
         printf "%.2f TH/s" $(echo "$hashps/1000000000000" | bc -l)
-    elif (( $(echo "$hashps > 1000000000" | bc -l) )); then
+    elif [ "$(echo "$hashps > 1000000000" | bc -l)" -eq 1 ]; then
         printf "%.2f GH/s" $(echo "$hashps/1000000000" | bc -l)
-    elif (( $(echo "$hashps > 1000000" | bc -l) )); then
+    elif [ "$(echo "$hashps > 1000000" | bc -l)" -eq 1 ]; then
         printf "%.2f MH/s" $(echo "$hashps/1000000" | bc -l)
-    elif (( $(echo "$hashps > 1000" | bc -l) )); then
+    elif [ "$(echo "$hashps > 1000" | bc -l)" -eq 1 ]; then
         printf "%.2f KH/s" $(echo "$hashps/1000" | bc -l)
     else
         printf "%.2f H/s" $hashps
     fi
 }
 
-# Function to get mempool info
+# Refactored function to get network hashrate
+get_network_hashps() {
+    local hashps=$(parse_network_hashps)
+    format_network_hashps "$hashps"
+}
+
+# Function to parse mempool info
+parse_mempool_info() {
+    local tx_count=$(echo "$MEMPOOL_INFO" | jq -r '.size.memory // 0' 2>/dev/null || echo "0")
+    local sqlite_count=$(echo "$MEMPOOL_INFO" | jq -r '.size.sqlite // 0' 2>/dev/null || echo "0")
+    local bytes=$(echo "$MEMPOOL_INFO" | jq -r '.bytes // 0' 2>/dev/null || echo "0")  # Memory size in bytes
+    echo "$tx_count $sqlite_count $bytes"
+}
+
+# Function to format mempool info
+format_mempool_info() {
+    local tx_count="$1"
+    local sqlite_count="$2"
+    local bytes="$3"
+    if [[ "$bytes" -eq 0 ]]; then
+        local mb="0.0"
+    else
+        local mb=$(echo "scale=1; $bytes/1048576" | bc 2>/dev/null || echo "0.0")
+    fi
+    local combined_count=$((tx_count + sqlite_count))
+    echo "$combined_count txs (${mb} MB)"
+}
+
+# Refactored function to get mempool info
 get_mempool_info() {
-    local tx_count=$(echo "$MEMPOOL_INFO" | jq -r '.size.memory // 0')
-    local bytes=$(echo "$MEMPOOL_INFO" | jq -r '.bytes // 0')
-    local mb=$(echo "scale=1; $bytes/1048576" | bc 2>/dev/null || echo "0.0")
-    echo "$tx_count txs (${mb} MB)"
+    local mempool_data=$(parse_mempool_info)
+    local tx_count=$(echo "$mempool_data" | awk '{print $1}')
+    local sqlite_count=$(echo "$mempool_data" | awk '{print $2}')
+    local bytes=$(echo "$mempool_data" | awk '{print $3}')
+    format_mempool_info "$tx_count" "$sqlite_count" "$bytes"
 }
 
 # Function to get stake time
@@ -189,53 +312,55 @@ get_staking_status() {
     fi
 }
 
-# Refactored function to get staking info
-get_staking_info() {
+# Function to get staking weight and net weight
+get_staking_weight() {
     local info="$STAKING_INFO"
     local weight=$(echo "$info" | jq -r '.weight')
     local netweight=$(echo "$info" | jq -r '.netstakeweight')
-    local expected=$(echo "$info" | jq -r '.expectedtime')
-    
+
     # Convert satoshis to coins (1 coin = 100,000,000 satoshis)
-    local coins_weight=$(echo "scale=8; $weight/100000000" | bc)
-    local coins_netweight=$(echo "scale=8; $netweight/100000000" | bc)
-    
-    # Format with commas left of decimal point
-    local weight_integer=$(echo "$coins_weight" | cut -d'.' -f1)
-    local weight_decimal=$(echo "$coins_weight" | cut -d'.' -f2)
-    local netweight_integer=$(echo "$coins_netweight" | cut -d'.' -f1)
-    local netweight_decimal=$(echo "$coins_netweight" | cut -d'.' -f2)
-    
-    local formatted_weight_integer=$(format_with_commas $weight_integer)
-    local formatted_netweight_integer=$(format_with_commas $netweight_integer)
-    
-    local formatted_weight="${formatted_weight_integer}.${weight_decimal}"
-    local formatted_netweight="${formatted_netweight_integer}.${netweight_decimal}"
-    
+    local coins_weight=$(echo "$weight / 100000000" | bc)
+    local coins_netweight=$(echo "$netweight / 100000000" | bc)
+
+    # Remove decimals for readability
+    local formatted_weight=$(printf "%'d" "$coins_weight")
+    local formatted_netweight=$(printf "%'d" "$coins_netweight")
+
     # Calculate percentage
     local percentage=0
-    if (( $(echo "$netweight > 0" | bc -l) )); then
-        percentage=$(echo "scale=2; ($weight * 100) / $netweight" | bc)
+    if (( netweight > 0 )); then
+        percentage=$(echo "($weight * 100) / $netweight" | bc)
     fi
-    
+
+    echo "Weight: $formatted_weight/$formatted_netweight ($percentage%)"
+}
+
+# Function to get the next stake time
+get_next_stake_time() {
+    local expected=$(echo "$STAKING_INFO" | jq -r '.expectedtime')
+
     # Format expected time
-    local formatted_expected
     if (( expected > 86400 )); then
         local days=$(( expected / 86400 ))
         local hours=$(( (expected % 86400) / 3600 ))
-        formatted_expected="${days}d${hours}h"
+        echo "~${days}d${hours}h"
     elif (( expected > 3600 )); then
         local hours=$(( expected / 3600 ))
         local minutes=$(( (expected % 3600) / 60 ))
-        formatted_expected="${hours}h${minutes}m"
+        echo "~${hours}h${minutes}m"
     elif (( expected > 0 )); then
         local minutes=$(( expected / 60 ))
-        formatted_expected="${minutes}m"
+        echo "~${minutes}m"
     else
-        formatted_expected="unknown"
+        echo "unknown"
     fi
-    
-    echo "Weight: $formatted_weight/$formatted_netweight ($percentage%) | Next: ~$formatted_expected"
+}
+
+# Refactored function to get staking info
+get_staking_info() {
+    local weight_info=$(get_staking_weight)
+    local next_time=$(get_next_stake_time)
+    echo "$weight_info | Next: $next_time"
 }
 
 # Function to get last stake reward time
@@ -275,7 +400,7 @@ get_net_stake_weight() {
 
 # Function to get memory usage information (compact version)
 get_memory_usage_info() {
-    local mem_info=$(free -h | awk 'NR==2 {print $3"/"$2" ("$3/$2*100"%)";}' | sed 's/%)/%)/')
+    local mem_info=$(free -h | awk 'NR==2 {if ($2 != 0) print $3"/"$2" ("$3/$2*100"%)"; else print "0/0 (0%)"}' 2>/dev/null || echo "Memory Metrics: Unavailable")
     echo "$mem_info"
 }
 
@@ -342,48 +467,96 @@ get_node_uptime() {
 }
 
 # Function to get disk usage
-get_disk_usage() {
+parse_disk_usage() {
     local blockchain_dir="$HOME/.pocketcoin"
     if [ -d "$blockchain_dir" ]; then
-        local usage=$(du -sh "$blockchain_dir" 2>/dev/null | cut -f1)
-        local avail=$(df -h "$blockchain_dir" | awk 'NR==2 {print $4}')
-        local used=$(df -h "$blockchain_dir" | awk 'NR==2 {print $3}')
-        local total=$(df -h "$blockchain_dir" | awk 'NR==2 {print $2}')
-        local percent=$(df -h "$blockchain_dir" | awk 'NR==2 {print $5}')
-        echo "$used/$total ($percent)"
+        df -h "$blockchain_dir" | awk 'NR==2 {print $3, $2, $5}'
     else
         echo "Unknown"
     fi
 }
 
-# Function to get CPU usage
-get_cpu_usage() {
-    top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4 "%"}'
+# Function to format disk usage
+format_disk_usage() {
+    local disk_data="$1"
+    if [[ "$disk_data" == "Unknown" ]]; then
+        echo "Unknown"
+    else
+        local used=$(echo "$disk_data" | awk '{print $1}')
+        local total=$(echo "$disk_data" | awk '{print $2}')
+        local percent=$(echo "$disk_data" | awk '{print $3}')
+        echo "$used/$total ($percent)"
+    fi
 }
 
-# Function to get memory usage
+# Refactored function to get disk usage
+get_disk_usage() {
+    local disk_data=$(parse_disk_usage)
+    format_disk_usage $disk_data
+}
+
+# Function to parse CPU usage
+parse_cpu_usage() {
+    top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}' || echo "0"
+}
+
+# Function to format CPU usage
+format_cpu_usage() {
+    local usage="$1"
+    printf "%.2f%%" "$usage"
+}
+
+# Refactored function to get CPU usage
+get_cpu_usage() {
+    local usage=$(parse_cpu_usage)
+    format_cpu_usage "$usage"
+}
+
+# Function to parse memory usage
+parse_memory_usage() {
+    free -h | awk 'NR==2 {print $2, $3, $4}' || echo "0 0 0"
+}
+
+# Function to format memory usage
+format_memory_usage() {
+    local total="$1"
+    local used="$2"
+    local free="$3"
+    echo "Total: $total, Used: $used, Free: $free"
+}
+
+# Refactored function to get memory usage
 get_memory_usage() {
-    free -h | awk 'NR==2 {print "Total: " $2 ", Used: " $3 ", Free: " $4}'
+    local memory_data=$(parse_memory_usage)
+    local total=$(echo "$memory_data" | awk '{print $1}')
+    local used=$(echo "$memory_data" | awk '{print $2}')
+    local free=$(echo "$memory_data" | awk '{print $3}')
+    format_memory_usage "$total" "$used" "$free"
 }
 
 # Function to get debug log
 get_debug_log() {
+    local lines=${1:-5} # Default to 5 lines if no parameter is provided
     local log_file="$HOME/.pocketcoin/debug.log"
     if [ -f "$log_file" ]; then
-        tail -n 5 "$log_file" | jq -R -r 'split(" ") | "\(.[0] + " " + .[1]) \(.[2:] | join(" "))"' || echo "Error reading log"
+        tail -n "$lines" "$log_file" || echo "Error reading log"
     else
         echo "Debug log file not found"
     fi
 }
 
-# Function to display the last 5 lines of the probe_nodes.log if it exists
+# Function to display the last N lines of the probe_nodes.log if it exists
 display_probe_nodes_log() {
-    local log_file="$HOME/probe_nodes/probe_nodes.log"
+    local lines=${1:-5} # Default to 5 lines if no parameter is provided
+    local log_file="$PROBE_NODES_LOG_PATH"
     if [ -f "$log_file" ]; then
-        echo "── probe_nodes.log ──"
-        tail -n 5 "$log_file"
+        log_entries=()
+        while read -r line; do
+            log_entries+=("$line")
+        done < <(tail -n "$lines" "$log_file")
+        create_boxed_section "Probe Nodes Log" "${log_entries[@]}"
     else
-        echo "probe_nodes.log not found"
+        echo "Probe Nodes Log: Not Found"
     fi
 }
 
@@ -398,6 +571,7 @@ get_highest_balance_address() {
         echo "Unknown"
     fi
 }
+
 # Helper function to create a boxed section
 create_boxed_section() {
     local title="$1"
@@ -435,25 +609,67 @@ create_boxed_section() {
     # Bottom border - exactly matching the top border width
     printf "└%s┘\n" "$(printf '─%.0s' $(seq 1 $internal_width))"
 }
+
 # Function to get swap memory usage
+parse_swap_memory() {
+    free -h | awk 'NR==3 {print $3"/"$2" ("$3/$2*100"%)";}'
+}
+
+# Function to format swap memory
+format_swap_memory() {
+    local swap_memory="$1"
+    echo "$swap_memory"
+}
+
+# Refactored function to get swap memory
 get_swap_memory() {
-    local swap_info=$(free -h | awk 'NR==3 {print $3"/"$2" ("$3/$2*100"%)";}' | sed 's/%)/%)/')
-    echo "$swap_info"
+    local swap_memory=$(parse_swap_memory)
+    format_swap_memory "$swap_memory"
 }
 
 # Function to get system uptime
-get_system_uptime() {
+parse_system_uptime() {
     uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1, $2}' | sed 's/^ *//;s/ *$//'
 }
 
+# Refactored function to get system uptime
+get_system_uptime() {
+    local uptime=$(parse_system_uptime)
+    format_system_uptime "$uptime"
+}
+
 # Function to get system load averages
-get_load_averages() {
+parse_load_averages() {
     uptime | awk -F'load average: ' '{print $2}'
 }
 
-# Function to get current UTC time
+# Function to format load averages
+format_load_averages() {
+    local load_averages="$1"
+    echo "$load_averages"
+}
+
+# Refactored function to get load averages
+get_load_averages() {
+    local load_averages=$(parse_load_averages)
+    format_load_averages "$load_averages"
+}
+
+# Function to parse UTC time
+parse_utc_time() {
+    date -u +"%Y-%m-%d %H:%M:%S"
+}
+
+# Function to format UTC time
+format_utc_time() {
+    local time="$1"
+    echo "${time} UTC"
+}
+
+# Refactored function to get UTC time
 get_utc_time() {
-    date -u +"%Y-%m-%d %H:%M:%S UTC"
+    local time=$(parse_utc_time)
+    format_utc_time "$time"
 }
 
 # Function to display boxed UI
@@ -474,7 +690,7 @@ display_boxed_ui() {
     # Wallet Box
     local balance=$(get_wallet_balance)
     local highest_address=$(get_highest_balance_address)
-    local stake_count=$(get_stake_report | grep -o "Count:.*" | cut -d' ' -f2)
+    local stake_count=$(get_stake_count)
     wallet_status=$(printf "Addr: %-34s | Status: %-20s | Unconf: %-10s" \
            "$highest_address" "$(get_wallet_status)" "$(get_unconfirmed_balance)")
     wallet_status2=$(printf "Balance: %-17s | Stake Wins: %-10s" \
@@ -508,8 +724,8 @@ display_boxed_ui() {
     done < <(get_debug_log)
     create_boxed_section "Log Entries" "${log_entries[@]}"
     
-    # Probe nodes log if exists
-    display_probe_nodes_log
+    # Probe Nodes Log Box
+    display_probe_nodes_log 5
 }
 
 # Function to display compact UI (no boxes)
@@ -593,6 +809,12 @@ format_time_difference() {
     fi
 }
 
+# Function to format system uptime
+format_system_uptime() {
+    local uptime="$1"
+    echo "$uptime"
+}
+
 # Function to cache pocketcoin-cli data
 cache_pocketcoin_data() {
     GETINFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS -getinfo 2>/dev/null || echo "{}")
@@ -606,6 +828,23 @@ cache_pocketcoin_data() {
         STAKE_REPORT=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}")
         LISTADDRESSGROUPINGS=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings 2>/dev/null || echo "[]")
     fi
+}
+
+# Function to parse stake count
+parse_stake_count() {
+    echo "$STAKE_REPORT" | jq -r '."Stake counted"' || echo "0"
+}
+
+# Function to format stake count
+format_stake_count() {
+    local count="$1"
+    echo "$count"
+}
+
+# Refactored function to get stake count
+get_stake_count() {
+    local count=$(parse_stake_count)
+    format_stake_count "$count"
 }
 
 # Parse command line arguments
