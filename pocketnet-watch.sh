@@ -119,12 +119,14 @@ get_wallet_status() {
 
 # Function to get node version
 get_node_version() {
-    echo "$GETINFO" | jq -r '.version' || echo "Unknown"
+    local version=$(parse_node_version)
+    format_node_version "$version"
 }
 
 # Function to get network type
 get_network_type() {
-    echo "$NETWORK_INFO" | jq -r '.networkactive' | grep -q "true" && echo "Mainnet" || echo "Unknown"
+    local active=$(parse_network_type)
+    format_network_type "$active"
 }
 
 # Function to calculate connections details
@@ -152,7 +154,8 @@ get_connections_details() {
 
 # Function to get block info
 get_block_info() {
-    echo "$GETINFO" | jq -r '.blocks' || echo "Unknown"
+    local blocks=$(parse_block_info)
+    format_block_info "$blocks"
 }
 
 # Function to get blockchain info
@@ -381,21 +384,8 @@ get_last_stake_reward() {
 
 # Function to get net stake weight
 get_net_stake_weight() {
-    local netweight=$(echo "$STAKING_INFO" | jq -r '.netstakeweight // 0')
-    
-    # Convert satoshis to coins (1 coin = 100,000,000 satoshis)
-    local coins_netweight=$(echo "scale=8; $netweight/100000000" | bc)
-    
-    # Format with commas left of decimal point
-    # Split at decimal point
-    local netweight_integer=$(echo "$coins_netweight" | cut -d'.' -f1)
-    local netweight_decimal=$(echo "$coins_netweight" | cut -d'.' -f2)
-    
-    # Add commas to integer with printf
-    local formatted_netweight_integer=$(format_with_commas $netweight_integer)
-    
-    # Combine back with decimal portion
-    echo "${formatted_netweight_integer}.${netweight_decimal}"
+    local netweight=$(parse_net_stake_weight)
+    format_net_stake_weight "$netweight"
 }
 
 # Function to get memory usage information (compact version)
@@ -432,38 +422,14 @@ get_free_memory() {
 
 # Function to get stake report
 get_stake_report() {
-    local report="$STAKE_REPORT"
-    
-    # Extract data using jq
-    local last24=$(echo "$report" | jq -r '."Last 24H"' || echo "0.00")
-    local last7d=$(echo "$report" | jq -r '."Last 7 Days"' || echo "0.00")
-    local last30d=$(echo "$report" | jq -r '."Last 30 Days"' || echo "0.00")
-    local last365d=$(echo "$report" | jq -r '."Last 365 Days"' || echo "0.00")
-    local count=$(echo "$report" | jq -r '."Stake counted"' || echo "0")
-
-    # Ensure the values are explicitly set to 0.00 if empty
-    last24=${last24:-0.00}
-    last7d=${last7d:-0.00}
-    last30d=${last30d:-0.00}
-    last365d=${last365d:-0.00}
-    count=${count:-0}
-
-    # Display the values with consistent precision
-    printf "24h: %.8f | 7d: %.8f | 30d: %.8f | 365d: %.8f | Count: %d\n" \
-        "$last24" "$last7d" "$last30d" "$last365d" "$count"
+    local report=$(parse_stake_report)
+    format_stake_report "$report"
 }
 
 # Function to get node uptime
 get_node_uptime() {
-    # Use pocketcoin-cli uptime to get the uptime in seconds
-    local uptime_seconds=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS uptime 2>/dev/null || echo "0")
-
-    # Ensure uptime_seconds is a valid positive number
-    if [[ "$uptime_seconds" -gt 0 ]]; then
-        format_time_difference "$uptime_seconds"
-    else
-        echo "unknown"
-    fi
+    local uptime_seconds=$(parse_node_uptime)
+    format_node_uptime "$uptime_seconds"
 }
 
 # Function to get disk usage
@@ -534,54 +500,10 @@ get_memory_usage() {
     format_memory_usage "$total" "$used" "$free"
 }
 
-# Function to parse debug log
-parse_debug_log() {
-    local lines=${1:-5}
-    local log_file="$HOME/.pocketcoin/debug.log"
-    if [ -f "$log_file" ]; then
-        tail -n "$lines" "$log_file" || echo "Error reading log"
-    else
-        echo "Debug log file not found"
-    fi
-}
-
-# Function to format debug log
-format_debug_log() {
-    local log_entries="$1"
-    echo "$log_entries"
-}
-
-# Refactored function to get debug log
-get_debug_log() {
-    local log_entries=$(parse_debug_log)
-    format_debug_log "$log_entries"
-}
-
-# Function to display the last N lines of the probe_nodes.log if it exists
-display_probe_nodes_log() {
-    local lines=${1:-5} # Default to 5 lines if no parameter is provided
-    local log_file="$PROBE_NODES_LOG_PATH"
-    if [ -f "$log_file" ]; then
-        log_entries=()
-        while read -r line; do
-            log_entries+=("$line")
-        done < <(tail -n "$lines" "$log_file")
-        create_boxed_section "Probe Nodes Log" "${log_entries[@]}"
-    else
-        echo "Probe Nodes Log: Not Found"
-    fi
-}
-
 # Function to get the highest balance wallet address
 get_highest_balance_address() {
-    local highest_entry=$(echo "$LISTADDRESSGROUPINGS" | jq -c '[.[][]] | max_by(.[1]) // null')
-
-    if [[ "$highest_entry" != "null" ]]; then
-        local highest_address=$(echo "$highest_entry" | jq -r '.[0]')
-        echo "$highest_address"
-    else
-        echo "Unknown"
-    fi
+    local highest_entry=$(parse_highest_balance_address)
+    format_highest_balance_address "$highest_entry"
 }
 
 # Helper function to create a boxed section
@@ -590,11 +512,19 @@ create_boxed_section() {
     shift
     local content=("$@")
     
-    # Calculate the maximum content width
+    # Calculate the maximum content width with extra padding for any special characters
     local max_content_width=0
     for line in "${content[@]}"; do
-        if [ ${#line} -gt $max_content_width ]; then
-            max_content_width=${#line}
+        # Basic character count
+        local line_width=$(echo -n "$line" | wc -m)
+        
+        # Add extra space for any line containing special characters
+        if [[ "$line" == *"↓"* || "$line" == *"↑"* ]]; then
+            line_width=$((line_width + 2))  # Add 2 extra spaces for safety
+        fi
+        
+        if [ $line_width -gt $max_content_width ]; then
+            max_content_width=$line_width
         fi
     done
     
@@ -615,7 +545,12 @@ create_boxed_section() {
     
     # Content lines
     for line in "${content[@]}"; do
-        printf "│ %-${max_content_width}s │\n" "$line"
+        # Add extra padding specifically for lines with arrows
+        if [[ "$line" == *"↓"* || "$line" == *"↑"* ]]; then
+            printf "│ %-${max_content_width}s │\n" "$line  "  # Add extra spaces after content
+        else
+            printf "│ %-${max_content_width}s │\n" "$line"
+        fi
     done
     
     # Bottom border - exactly matching the top border width
@@ -684,98 +619,90 @@ get_utc_time() {
     format_utc_time "$time"
 }
 
-# Function to display boxed UI
-display_boxed_ui() {
-    # Node Status Box
-    node_status=$(printf "Node: v%-8s | Net: %-8s | Connections: %-14s | Sync: %-6s | Uptime: %-8s | UTC: %-20s" \
-           "$(get_node_version)" "$(get_network_type)" "$(get_connections_details)" \
-           "$(get_sync_status)" "$(get_node_uptime)" "$(get_utc_time)")
-    create_boxed_section "Node Status" "$node_status"
-    
-    # Blockchain Box
-    blockchain_line1=$(printf "Blocks: %-8s | Difficulty: %-14s | Hash: %-12s" \
-           "$(get_block_info)" "$(get_difficulty)" "$(get_network_hashps)")
-    blockchain_line2=$(printf "Mempool: %-20s | NetStakeWeight: %-22s" \
-           "$(get_mempool_info)" "$(get_net_stake_weight)")
-    create_boxed_section "Blockchain" "$blockchain_line1" "$blockchain_line2"
-    
-    # Wallet Box
-    local balance=$(get_wallet_balance)
-    local highest_address=$(get_highest_balance_address)
-    local stake_count=$(get_stake_count)
-    wallet_status=$(printf "Addr: %-34s | Status: %-20s | Unconf: %-10s" \
-           "$highest_address" "$(get_wallet_status)" "$(get_unconfirmed_balance)")
-    wallet_status2=$(printf "Balance: %-17s | Stake Wins: %-10s" \
-           "$balance" "$stake_count")
-    create_boxed_section "Wallet" "$wallet_status" "$wallet_status2"
-    
-    # Staking Box - show values even if zero
-    staking_line1=$(printf "Staking Status: %-8s | %-60s | Last: %-8s" \
-           "$(get_staking_status)" "$(get_staking_info || echo '0')" "$(get_last_stake_reward || echo '0')")
-    staking_line2=$(printf "%-60s" \
-           "$(get_stake_report | sed 's/| Count:.*//')")
-    create_boxed_section "Staking" "$staking_line1" "$staking_line2"
-    
-    # System Resources Box - show values even if zero
-    local disk_usage=$(get_disk_usage)
-    local cpu_usage=$(get_cpu_usage)
-    local memory_info=$(get_memory_usage_info)
-    local swap_memory=$(get_swap_memory)
-    local uptime=$(get_system_uptime)
-    local load_averages=$(get_load_averages)
+# Update UI_SECTIONS to use colon as a delimiter for file paths and line counts
+declare -A UI_SECTIONS
+UI_SECTIONS=(
+    ["Node Status"]="node_version network_type connections_details sync_status node_uptime utc_time"
+    ["Blockchain"]="block_info difficulty network_hashps mempool_info net_stake_weight"
+    ["Wallet"]="wallet_balance wallet_status unconfirmed_balance highest_balance_address"
+    ["Staking"]="staking_status staking_info last_stake_reward stake_report"
+    ["System Resources"]="disk_usage cpu_usage memory_usage swap_memory system_uptime load_averages"
+    ["Debug Log"]="file:${HOME}/.pocketcoin/debug.log:5"
+    ["Probe Nodes Log"]="file:${HOME}/probe_nodes/probe_nodes.log:5"
+)
 
-    system_resources=$(printf "Disk: %-18s | CPU: %-8s" "$disk_usage" "$cpu_usage")
-    system_resources2=$(printf "Mem: %-20s | Swap: %-20s" "$memory_info" "$swap_memory")
-    system_resources3=$(printf "Uptime: %-12s | Load: %-18s" "$uptime" "$load_averages")
-    create_boxed_section "System Resources" "$system_resources" "$system_resources2" "$system_resources3"
-    
-    # Log Entries Box
-    log_entries=()
-    while read -r line; do
-        log_entries+=("$line")
-    done < <(get_debug_log)
-    create_boxed_section "Log Entries" "${log_entries[@]}"
-    
-    # Probe Nodes Log Box
-    display_probe_nodes_log 5
+# Generic function to display file content
+display_file_content() {
+    local file_path="$1"
+    local lines="${2:-5}" # Default to 5 lines if not specified
+
+    file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
+    if [ -f "$file_path" ]; then
+        tail -n "$lines" "$file_path" || echo "Error reading file: $file_path"
+    else
+        echo "File not found: $file_path"
+    fi
 }
 
-# Function to display compact UI (no boxes)
+# Modify render_section to expand ${HOME} in file paths
+render_section() {
+    local section_name="$1"
+    local metrics="${UI_SECTIONS[$section_name]}"
+
+    local content_lines=()
+    for metric in $metrics; do
+        if [[ "$metric" == file:* ]]; then
+            # Extract file path and number of lines using colon as delimiter
+            local file_info=${metric#file:}  # Remove 'file:' prefix
+            local file_path=$(echo "$file_info" | cut -d':' -f1)
+            local lines=$(echo "$file_info" | cut -d':' -f2)
+            file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
+            while read -r line; do
+                content_lines+=("$line")
+            done < <(display_file_content "$file_path" "$lines")
+        else
+            local value=$(get_${metric} 2>/dev/null || echo "N/A")
+            content_lines+=("$metric: $value")
+        fi
+    done
+
+    create_boxed_section "$section_name" "${content_lines[@]}"
+}
+
+# Refactored function to display compact UI (no boxes)
 display_compact_ui() {
-    # Date and basic info
-    printf "%-20s | %-12s | %-20s | %-12s | %-12s\n" \
-           "Node: v$(get_node_version)" "Net: $(get_network_type)" \
-           "Connections: $(get_connections_details)" "Sync: $(get_sync_status)" "Up: $(get_node_uptime)"
-    # Blockchain info
-    printf "%-20s | %-18s | %-21s | %s\n" \
-           "Blocks: $(get_block_info)" "Difficulty: $(get_difficulty)" \
-           "Hash: $(get_network_hashps)" "Mempool: $(get_mempool_info)"
-    # Wallet info
-    local addr=$(get_highest_balance_address)
-    local short_addr="${addr:0:6}...${addr: -6}"
-    printf "%-20s | %-16s | %-16s | %s\n" \
-           "Addr: $short_addr" "Balance: $(get_wallet_info)" \
-           "Unconf: $(get_unconfirmed_balance)" "Status: $(get_wallet_status)"
-    # Staking info
-    printf "%s | Last: %s\n" \
-           "$(get_staking_info)" "$(get_last_stake_reward)"
-    printf "%s\n" "$(get_stake_report)"
-    # System resources
-    printf "%-20s | %-12s\n" \
-           "Disk: $(get_disk_usage)" "CPU: $(get_cpu_usage)"
-    # Memory usage
-    get_memory_usage
-    # Debug log
-    echo "-- Last log entries --"
-    get_debug_log
-    # Probe nodes log
-    display_probe_nodes_log
+    for section in "Node Status" "Blockchain" "Wallet" "Staking" "System Resources" "Debug Log" "Probe Nodes Log"; do
+        echo "-- $section --"
+        local metrics="${UI_SECTIONS[$section]}"
+        for metric in $metrics; do
+            if [[ "$metric" == file:* ]]; then
+                # Extract file path and number of lines using colon as delimiter
+                local file_info=${metric#file:}  # Remove 'file:' prefix
+                local file_path=$(echo "$file_info" | cut -d':' -f1)
+                local lines=$(echo "$file_info" | cut -d':' -f2)
+                file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
+                display_file_content "$file_path" "$lines"
+            else
+                local value=$(get_${metric} 2>/dev/null || echo "N/A")
+                printf "%-20s: %s\n" "$metric" "$value"
+            fi
+        done
+        echo ""
+    done | while read -r line; do echo "$line"; done
 }
+
+# Main UI renderer
+render_ui() {
+    for section in "Node Status" "Blockchain" "Wallet" "Staking" "System Resources" "Debug Log" "Probe Nodes Log"; do
+        render_section "$section"
+    done | while read -r line; do echo "$line"; done
+}
+
 
 # Function to display metrics
 display_metrics() {
     if [ "$USE_BOXED_UI" = true ]; then
-        display_boxed_ui
+        render_ui
     else
         display_compact_ui
     fi
@@ -888,7 +815,7 @@ echo " - Running pocketcoin-cli getwalletinfo..."
 WALLET_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo 2>/dev/null || echo "{}")
 echo ""
 echo "Initialization complete. Starting the script..."
-
+clear 
 
 counter=0
 tput civis # Hide the cursor
