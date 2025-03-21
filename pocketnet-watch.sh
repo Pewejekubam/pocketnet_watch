@@ -11,6 +11,12 @@
 # Refining cache_pocketcoin_data function to reduce calls to pocketcoin-cli
 # Timestamp: 202503210736 CST
 # Finished cache optimization.  Tightening up label:value pairs display.
+# Timestamp: 202503201113 CST
+# Completed text box display optimization.
+# fixed some formatting issues
+
+
+
 # -----------------------------------------------------------------------------
 # Custom arguments for pocketcoin-cli
 # Note: This can be an empty string if no custom arguments are needed.
@@ -20,7 +26,6 @@ POCKETCOIN_CLI_ARGS=""
 USE_BOXED_UI=true     # Set to false for non-boxed UI
 REFRESH_SECONDS=5     # Time between screen refreshes
 CLEAR_CYCLES=15       # Clear screen every N cycles
-# BOX_PADDING=2         # Padding inside UI boxes
 DEFAULT_BOX_WIDTH=80  # Default width for UI boxes
 
 # Check for jq installation
@@ -174,10 +179,19 @@ get_stake_time() {
     echo "$STAKING_INFO" | jq -r '.["stake-time"]' || echo "Unknown"
 }
 
-# Function to get staking info
+# Function to get staking status
+get_staking_status() {
+    local status=$(echo "$STAKING_INFO" | jq -r '.staking // false')
+    if [[ "$status" == "true" ]]; then
+        echo "TRUE"
+    else
+        echo "FALSE"
+    fi
+}
+
+# Refactored function to get staking info
 get_staking_info() {
     local info="$STAKING_INFO"
-    local status=$(echo "$info" | jq -r '.staking')
     local weight=$(echo "$info" | jq -r '.weight')
     local netweight=$(echo "$info" | jq -r '.netstakeweight')
     local expected=$(echo "$info" | jq -r '.expectedtime')
@@ -187,17 +201,14 @@ get_staking_info() {
     local coins_netweight=$(echo "scale=8; $netweight/100000000" | bc)
     
     # Format with commas left of decimal point
-    # First, split at decimal point
     local weight_integer=$(echo "$coins_weight" | cut -d'.' -f1)
     local weight_decimal=$(echo "$coins_weight" | cut -d'.' -f2)
     local netweight_integer=$(echo "$coins_netweight" | cut -d'.' -f1)
     local netweight_decimal=$(echo "$coins_netweight" | cut -d'.' -f2)
     
-    # Add commas to integers with printf
     local formatted_weight_integer=$(format_with_commas $weight_integer)
     local formatted_netweight_integer=$(format_with_commas $netweight_integer)
     
-    # Combine back with decimal portion
     local formatted_weight="${formatted_weight_integer}.${weight_decimal}"
     local formatted_netweight="${formatted_netweight_integer}.${netweight_decimal}"
     
@@ -205,13 +216,6 @@ get_staking_info() {
     local percentage=0
     if (( $(echo "$netweight > 0" | bc -l) )); then
         percentage=$(echo "scale=2; ($weight * 100) / $netweight" | bc)
-    fi
-    
-    # Format status
-    if [[ "$status" == "true" ]]; then
-        status="ACTIVE"
-    else
-        status="INACTIVE"
     fi
     
     # Format expected time
@@ -231,8 +235,9 @@ get_staking_info() {
         formatted_expected="unknown"
     fi
     
-    echo "$status | Weight: $formatted_weight/$formatted_netweight ($percentage%) | Next: ~$formatted_expected"
+    echo "Weight: $formatted_weight/$formatted_netweight ($percentage%) | Next: ~$formatted_expected"
 }
+
 # Function to get last stake reward time
 get_last_stake_reward() {
     local last_stake_time=$(echo "$STAKE_REPORT" | jq -r '."Latest Time" // "0"')
@@ -304,26 +309,36 @@ get_free_memory() {
 get_stake_report() {
     local report="$STAKE_REPORT"
     
-    # Extract data using jq instead of grep since we're working with JSON
-    local last24=$(echo "$report" | jq -r '."Last 24H"' || echo "0")
-    local last7d=$(echo "$report" | jq -r '."Last 7 Days"' || echo "0")
-    local last30d=$(echo "$report" | jq -r '."Last 30 Days"' || echo "0")
-    local last365d=$(echo "$report" | jq -r '."Last 365 Days"' || echo "0")
+    # Extract data using jq
+    local last24=$(echo "$report" | jq -r '."Last 24H"' || echo "0.00")
+    local last7d=$(echo "$report" | jq -r '."Last 7 Days"' || echo "0.00")
+    local last30d=$(echo "$report" | jq -r '."Last 30 Days"' || echo "0.00")
+    local last365d=$(echo "$report" | jq -r '."Last 365 Days"' || echo "0.00")
     local count=$(echo "$report" | jq -r '."Stake counted"' || echo "0")
 
-    # Ensure the values are explicitly set to 0 if empty
-    last24=${last24:-0}
-    last7d=${last7d:-0}
-    last30d=${last30d:-0}
-    last365d=${last365d:-0}
+    # Ensure the values are explicitly set to 0.00 if empty
+    last24=${last24:-0.00}
+    last7d=${last7d:-0.00}
+    last30d=${last30d:-0.00}
+    last365d=${last365d:-0.00}
     count=${count:-0}
 
-    echo "24h: $last24 | 7d: $last7d | 30d: $last30d | 365d: $last365d | Count: $count"
+    # Display the values with consistent precision
+    printf "24h: %.8f | 7d: %.8f | 30d: %.8f | 365d: %.8f | Count: %d\n" \
+        "$last24" "$last7d" "$last30d" "$last365d" "$count"
 }
+
 # Function to get node uptime
 get_node_uptime() {
-    local uptime_seconds=$(echo "$GETINFO" | jq -r '.uptime // 0')
-    format_time_difference $uptime_seconds
+    # Use pocketcoin-cli uptime to get the uptime in seconds
+    local uptime_seconds=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS uptime 2>/dev/null || echo "0")
+
+    # Ensure uptime_seconds is a valid positive number
+    if [[ "$uptime_seconds" -gt 0 ]]; then
+        format_time_difference "$uptime_seconds"
+    else
+        echo "unknown"
+    fi
 }
 
 # Function to get disk usage
@@ -366,7 +381,9 @@ display_probe_nodes_log() {
     local log_file="$HOME/probe_nodes/probe_nodes.log"
     if [ -f "$log_file" ]; then
         echo "── probe_nodes.log ──"
-        tail -n 3 "$log_file" | jq -R -r 'split(" ") | "\(.[0] + " " + .[1]) \(.[2:] | join(" "))"' || echo "Error reading log"
+        tail -n 5 "$log_file"
+    else
+        echo "probe_nodes.log not found"
     fi
 }
 
@@ -448,9 +465,9 @@ display_boxed_ui() {
     create_boxed_section "Node Status" "$node_status"
     
     # Blockchain Box
-    blockchain_line1=$(printf "Blocks: %-10s | Difficulty: %-10s | Hash: %-20s" \
+    blockchain_line1=$(printf "Blocks: %-8s | Difficulty: %-14s | Hash: %-12s" \
            "$(get_block_info)" "$(get_difficulty)" "$(get_network_hashps)")
-    blockchain_line2=$(printf "Mempool: %-30s | NetStakeWeight: %-28s" \
+    blockchain_line2=$(printf "Mempool: %-20s | NetStakeWeight: %-22s" \
            "$(get_mempool_info)" "$(get_net_stake_weight)")
     create_boxed_section "Blockchain" "$blockchain_line1" "$blockchain_line2"
     
@@ -458,20 +475,20 @@ display_boxed_ui() {
     local balance=$(get_wallet_balance)
     local highest_address=$(get_highest_balance_address)
     local stake_count=$(get_stake_report | grep -o "Count:.*" | cut -d' ' -f2)
-    wallet_status=$(printf "Addr: %-34s | Status: %-50s | Unconf: %-10s" \
+    wallet_status=$(printf "Addr: %-34s | Status: %-20s | Unconf: %-10s" \
            "$highest_address" "$(get_wallet_status)" "$(get_unconfirmed_balance)")
-    wallet_status2=$(printf "sql_balance: %-12s | Stake Wins: %-10s" \
+    wallet_status2=$(printf "Balance: %-17s | Stake Wins: %-10s" \
            "$balance" "$stake_count")
     create_boxed_section "Wallet" "$wallet_status" "$wallet_status2"
     
     # Staking Box - show values even if zero
-    staking_line1=$(printf "%-56s | Last: %-8s" \
-           "$(get_staking_info || echo '0')" "$(get_last_stake_reward || echo '0')")
-    staking_line2=$(printf "%-72s" \
+    staking_line1=$(printf "Staking Status: %-8s | %-60s | Last: %-8s" \
+           "$(get_staking_status)" "$(get_staking_info || echo '0')" "$(get_last_stake_reward || echo '0')")
+    staking_line2=$(printf "%-60s" \
            "$(get_stake_report | sed 's/| Count:.*//')")
     create_boxed_section "Staking" "$staking_line1" "$staking_line2"
     
-    # System Resources Box - updated memory labels
+    # System Resources Box - show values even if zero
     local disk_usage=$(get_disk_usage)
     local cpu_usage=$(get_cpu_usage)
     local memory_info=$(get_memory_usage_info)
@@ -479,9 +496,9 @@ display_boxed_ui() {
     local uptime=$(get_system_uptime)
     local load_averages=$(get_load_averages)
 
-    system_resources=$(printf "Disk: %-20s | CPU: %-10s" "$disk_usage" "$cpu_usage")
+    system_resources=$(printf "Disk: %-18s | CPU: %-8s" "$disk_usage" "$cpu_usage")
     system_resources2=$(printf "Mem: %-20s | Swap: %-20s" "$memory_info" "$swap_memory")
-    system_resources3=$(printf "Uptime: %-15s | Load: %-20s" "$uptime" "$load_averages")
+    system_resources3=$(printf "Uptime: %-12s | Load: %-18s" "$uptime" "$load_averages")
     create_boxed_section "System Resources" "$system_resources" "$system_resources2" "$system_resources3"
     
     # Log Entries Box
