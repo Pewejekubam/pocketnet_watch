@@ -534,15 +534,27 @@ get_memory_usage() {
     format_memory_usage "$total" "$used" "$free"
 }
 
-# Function to get debug log
-get_debug_log() {
-    local lines=${1:-5} # Default to 5 lines if no parameter is provided
+# Function to parse debug log
+parse_debug_log() {
+    local lines=${1:-5}
     local log_file="$HOME/.pocketcoin/debug.log"
     if [ -f "$log_file" ]; then
         tail -n "$lines" "$log_file" || echo "Error reading log"
     else
         echo "Debug log file not found"
     fi
+}
+
+# Function to format debug log
+format_debug_log() {
+    local log_entries="$1"
+    echo "$log_entries"
+}
+
+# Refactored function to get debug log
+get_debug_log() {
+    local log_entries=$(parse_debug_log)
+    format_debug_log "$log_entries"
 }
 
 # Function to display the last N lines of the probe_nodes.log if it exists
