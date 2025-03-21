@@ -6,8 +6,11 @@
 # metrics and logs in a compact, organized UI. It retrieves information about
 # wallet balance, node status, blockchain details, staking info, and system
 # resources.
-# v0.4.0
-# Timestamp: 2025-03-19 1750 CST
+# v0.4.1
+# Timestamp: 2025-03-20 0816 CST
+# Refining cache_pocketcoin_data function to reduce calls to pocketcoin-cli
+# Timestamp: 202503210736 CST
+# Finished cache optimization.  Tightening up label:value pairs display.
 # -----------------------------------------------------------------------------
 # Custom arguments for pocketcoin-cli
 # Note: This can be an empty string if no custom arguments are needed.
@@ -168,12 +171,12 @@ get_mempool_info() {
 
 # Function to get stake time
 get_stake_time() {
-    pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo | jq -r '.["stake-time"]' || echo "Unknown"
+    echo "$STAKING_INFO" | jq -r '.["stake-time"]' || echo "Unknown"
 }
 
 # Function to get staking info
 get_staking_info() {
-    local info=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo 2>/dev/null)
+    local info="$STAKING_INFO"
     local status=$(echo "$info" | jq -r '.staking')
     local weight=$(echo "$info" | jq -r '.weight')
     local netweight=$(echo "$info" | jq -r '.netstakeweight')
@@ -232,7 +235,7 @@ get_staking_info() {
 }
 # Function to get last stake reward time
 get_last_stake_reward() {
-    local last_stake_time=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null | jq -r '."Latest Time" // "0"')
+    local last_stake_time=$(echo "$STAKE_REPORT" | jq -r '."Latest Time" // "0"')
     
     if [[ -z "$last_stake_time" || "$last_stake_time" == "0" ]]; then
         echo "Never"
@@ -299,7 +302,7 @@ get_free_memory() {
 
 # Function to get stake report
 get_stake_report() {
-    local report=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null)
+    local report="$STAKE_REPORT"
     
     # Extract data using jq instead of grep since we're working with JSON
     local last24=$(echo "$report" | jq -r '."Last 24H"' || echo "0")
@@ -319,7 +322,7 @@ get_stake_report() {
 }
 # Function to get node uptime
 get_node_uptime() {
-    local uptime_seconds=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS uptime 2>/dev/null || echo "0")
+    local uptime_seconds=$(echo "$GETINFO" | jq -r '.uptime // 0')
     format_time_difference $uptime_seconds
 }
 
@@ -369,8 +372,7 @@ display_probe_nodes_log() {
 
 # Function to get the highest balance wallet address
 get_highest_balance_address() {
-    local addresses=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings 2>/dev/null || echo "[]")
-    local highest_entry=$(echo "$addresses" | jq -c '[.[][]] | max_by(.[1]) // null')
+    local highest_entry=$(echo "$LISTADDRESSGROUPINGS" | jq -c '[.[][]] | max_by(.[1]) // null')
 
     if [[ "$highest_entry" != "null" ]]; then
         local highest_address=$(echo "$highest_entry" | jq -r '.[0]')
@@ -456,10 +458,10 @@ display_boxed_ui() {
     local balance=$(get_wallet_balance)
     local highest_address=$(get_highest_balance_address)
     local stake_count=$(get_stake_report | grep -o "Count:.*" | cut -d' ' -f2)
-    wallet_status=$(printf "Addr: %-34s | sql_balance: %-12s | Unconf: %-10s" \
-           "$highest_address" "$balance" "$(get_unconfirmed_balance)")
-    wallet_status2=$(printf "Status: %-50s | Stake Wins: %-10s" \
-           "$(get_wallet_status)" "$stake_count")
+    wallet_status=$(printf "Addr: %-34s | Status: %-50s | Unconf: %-10s" \
+           "$highest_address" "$(get_wallet_status)" "$(get_unconfirmed_balance)")
+    wallet_status2=$(printf "sql_balance: %-12s | Stake Wins: %-10s" \
+           "$balance" "$stake_count")
     create_boxed_section "Wallet" "$wallet_status" "$wallet_status2"
     
     # Staking Box - show values even if zero
@@ -585,6 +587,7 @@ cache_pocketcoin_data() {
         WALLET_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo 2>/dev/null || echo "{}")
         STAKING_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo 2>/dev/null || echo "{}")
         STAKE_REPORT=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}")
+        LISTADDRESSGROUPINGS=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings 2>/dev/null || echo "[]")
     fi
 }
 
