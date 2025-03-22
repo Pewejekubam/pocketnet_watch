@@ -6,7 +6,7 @@
 # metrics and logs in a compact, organized UI. It retrieves information about
 # wallet balance, node status, blockchain details, staking info, and system
 # resources.
-# v0.4.1
+# v0.4.6
 # Timestamp: 2025-03-20 0816 CST
 # Refining cache_pocketcoin_data function to reduce calls to pocketcoin-cli
 # Timestamp: 202503210736 CST
@@ -14,7 +14,8 @@
 # Timestamp: 202503201113 CST
 # Completed text box display optimization.
 # fixed some formatting issues
-
+# Timestamp: 202503221232 CST
+# Modular UI_SECTION framwork is working.  Still WIP but basics are solid
 
 
 # -----------------------------------------------------------------------------
@@ -119,14 +120,23 @@ get_wallet_status() {
 
 # Function to get node version
 get_node_version() {
-    local version=$(parse_node_version)
-    format_node_version "$version"
+    local version=$(echo "$GETINFO" | jq -r '.version // "Unknown"' 2>/dev/null || echo "Unknown")
+    if [[ "$version" != "Unknown" ]]; then
+        version=$(printf "v%s" "$version")
+    fi
+    echo "$version"
 }
 
 # Function to get network type
 get_network_type() {
-    local active=$(parse_network_type)
-    format_network_type "$active"
+    local active=$(echo "$NETWORK_INFO" | jq -r '.networkactive // "Unknown"' 2>/dev/null || echo "Unknown")
+    if [[ "$active" == "true" ]]; then
+        echo "Active"
+    elif [[ "$active" == "false" ]]; then
+        echo "Inactive"
+    else
+        echo "Unknown"
+    fi
 }
 
 # Function to calculate connections details
@@ -143,7 +153,7 @@ format_connections_details() {
     local total=$(echo "$details" | awk '{print $1}')
     local inbound=$(echo "$details" | awk '{print $2}')
     local outbound=$(echo "$details" | awk '{print $3}')
-    echo "$total ($inbound↓/$outbound↑)"
+    echo "$total (In:$inbound/Out:$outbound)"
 }
 
 # Refactored function to get connections details
@@ -384,8 +394,12 @@ get_last_stake_reward() {
 
 # Function to get net stake weight
 get_net_stake_weight() {
-    local netweight=$(parse_net_stake_weight)
-    format_net_stake_weight "$netweight"
+    local netweight=$(echo "$STAKING_INFO" | jq -r '.netstakeweight // 0' 2>/dev/null || echo "0")
+    if [[ "$netweight" -gt 0 ]]; then
+        echo "$(format_with_commas "$netweight")"
+    else
+        echo "Unknown"
+    fi
 }
 
 # Function to get memory usage information (compact version)
@@ -422,8 +436,8 @@ get_free_memory() {
 
 # Function to get stake report
 get_stake_report() {
-    local report=$(parse_stake_report)
-    format_stake_report "$report"
+    local report=$(echo "$STAKE_REPORT" | jq -r '."Stake counted" // "Unknown"' 2>/dev/null || echo "Unknown")
+    echo "$report"
 }
 
 # Function to get node uptime
@@ -433,32 +447,17 @@ get_node_uptime() {
 }
 
 # Function to get disk usage
-parse_disk_usage() {
+get_disk_usage() {
     local blockchain_dir="$HOME/.pocketcoin"
     if [ -d "$blockchain_dir" ]; then
-        df -h "$blockchain_dir" | awk 'NR==2 {print $3, $2, $5}'
-    else
-        echo "Unknown"
-    fi
-}
-
-# Function to format disk usage
-format_disk_usage() {
-    local disk_data="$1"
-    if [[ "$disk_data" == "Unknown" ]]; then
-        echo "Unknown"
-    else
+        local disk_data=$(df -h "$blockchain_dir" | awk 'NR==2 {print $3, $2, $5}')
         local used=$(echo "$disk_data" | awk '{print $1}')
         local total=$(echo "$disk_data" | awk '{print $2}')
         local percent=$(echo "$disk_data" | awk '{print $3}')
         echo "$used/$total ($percent)"
+    else
+        echo "Unknown"
     fi
-}
-
-# Refactored function to get disk usage
-get_disk_usage() {
-    local disk_data=$(parse_disk_usage)
-    format_disk_usage $disk_data
 }
 
 # Function to parse CPU usage
@@ -502,8 +501,11 @@ get_memory_usage() {
 
 # Function to get the highest balance wallet address
 get_highest_balance_address() {
-    local highest_entry=$(parse_highest_balance_address)
-    format_highest_balance_address "$highest_entry"
+    local highest_entry=$(echo "$LISTADDRESSGROUPINGS" | jq -r '.[0][0] // "Unknown"' 2>/dev/null || echo "Unknown")
+    if [[ "$highest_entry" == "["* ]]; then
+        highest_entry=$(echo "$highest_entry" | jq -r '.[0]' 2>/dev/null || echo "Unknown")
+    fi
+    echo "$highest_entry"
 }
 
 # Helper function to create a boxed section
@@ -619,17 +621,58 @@ get_utc_time() {
     format_utc_time "$time"
 }
 
-# Update UI_SECTIONS to use colon as a delimiter for file paths and line counts
+# Updated UI_SECTIONS with row-column layout
 declare -A UI_SECTIONS
 UI_SECTIONS=(
-    ["Node Status"]="node_version network_type connections_details sync_status node_uptime utc_time"
-    ["Blockchain"]="block_info difficulty network_hashps mempool_info net_stake_weight"
-    ["Wallet"]="wallet_balance wallet_status unconfirmed_balance highest_balance_address"
-    ["Staking"]="staking_status staking_info last_stake_reward stake_report"
-    ["System Resources"]="disk_usage cpu_usage memory_usage swap_memory system_uptime load_averages"
+    ["Node Status"]="layout:row1[node_version:20,network_type:20]|row2[connections_details:25,sync_status:15]|row3[node_uptime:25,utc_time:15]"
+    ["Blockchain"]="layout:row1[block_info:30,difficulty:20]|row2[network_hashps:25,mempool_info:25]|row3[net_stake_weight:50]"
+    ["Wallet"]="layout:row1[wallet_balance:30,wallet_status:20]|row2[unconfirmed_balance:25,highest_balance_address:25]"
+    ["Staking"]="layout:row1[staking_status:20,staking_info:40]|row2[last_stake_reward:30,stake_report:30]"
+    ["System Resources"]="layout:row1[disk_usage:30,cpu_usage:20]|row2[memory_usage:25,swap_memory:25]|row3[system_uptime:30,load_averages:20]"
     ["Debug Log"]="file:${HOME}/.pocketcoin/debug.log:5"
     ["Probe Nodes Log"]="file:${HOME}/probe_nodes/probe_nodes.log:5"
 )
+
+# Updated render_section to handle row-column layout
+render_section() {
+    local section_name="$1"
+    local metrics="${UI_SECTIONS[$section_name]}"
+
+    if [[ "$metrics" == layout:* ]]; then
+        # Handle layout sections
+        local layout="${metrics#layout:}"
+        local rows=(${layout//|/ })  # Split rows by '|'
+
+        local content_lines=()
+        for row in "${rows[@]}"; do
+            local row_content=""
+            local items="${row#row*[*}"  # Extract items inside brackets
+            items="${items%]*}"          # Remove trailing ']'
+            local metrics=(${items//,/ })  # Split metrics by ','
+
+            for metric in "${metrics[@]}"; do
+                local key="${metric%%:*}"  # Extract metric name
+                local width="${metric##*:}"  # Extract width
+                local value=$(get_${key} 2>/dev/null || echo "N/A")
+                row_content+=$(printf "%-${width}s" "$key: $value")
+            done
+            content_lines+=("$row_content")
+        done
+
+        create_boxed_section "$section_name" "${content_lines[@]}"
+    else
+        # Handle file sections
+        local file_info=${metrics#file:}
+        local file_path=$(echo "$file_info" | cut -d':' -f1)
+        local lines=$(echo "$file_info" | cut -d':' -f2)
+        file_path=$(eval echo "$file_path")
+        local content_lines=()
+        while read -r line; do
+            content_lines+=("$line")
+        done < <(display_file_content "$file_path" "$lines")
+        create_boxed_section "$section_name" "${content_lines[@]}"
+    fi
+}
 
 # Generic function to display file content
 display_file_content() {
@@ -644,49 +687,44 @@ display_file_content() {
     fi
 }
 
-# Modify render_section to expand ${HOME} in file paths
-render_section() {
-    local section_name="$1"
-    local metrics="${UI_SECTIONS[$section_name]}"
-
-    local content_lines=()
-    for metric in $metrics; do
-        if [[ "$metric" == file:* ]]; then
-            # Extract file path and number of lines using colon as delimiter
-            local file_info=${metric#file:}  # Remove 'file:' prefix
-            local file_path=$(echo "$file_info" | cut -d':' -f1)
-            local lines=$(echo "$file_info" | cut -d':' -f2)
-            file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
-            while read -r line; do
-                content_lines+=("$line")
-            done < <(display_file_content "$file_path" "$lines")
-        else
-            local value=$(get_${metric} 2>/dev/null || echo "N/A")
-            content_lines+=("$metric: $value")
-        fi
-    done
-
-    create_boxed_section "$section_name" "${content_lines[@]}"
-}
-
 # Refactored function to display compact UI (no boxes)
 display_compact_ui() {
     for section in "Node Status" "Blockchain" "Wallet" "Staking" "System Resources" "Debug Log" "Probe Nodes Log"; do
         echo "-- $section --"
         local metrics="${UI_SECTIONS[$section]}"
-        for metric in $metrics; do
-            if [[ "$metric" == file:* ]]; then
-                # Extract file path and number of lines using colon as delimiter
-                local file_info=${metric#file:}  # Remove 'file:' prefix
-                local file_path=$(echo "$file_info" | cut -d':' -f1)
-                local lines=$(echo "$file_info" | cut -d':' -f2)
-                file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
-                display_file_content "$file_path" "$lines"
-            else
+        if [[ "$metrics" == layout:* ]]; then
+            # Handle layout sections
+            local layout="${metrics#layout:}"
+            local rows=(${layout//|/ })  # Split rows by '|'
+
+            for row in "${rows[@]}"; do
+                local row_content=""
+                local items="${row#row*[*}"  # Extract items inside brackets
+                items="${items%]*}"          # Remove trailing ']'
+                local metrics=(${items//,/ })  # Split metrics by ','
+
+                for metric in "${metrics[@]}"; do
+                    local key="${metric%%:*}"  # Extract metric name
+                    local width="${metric##*:}"  # Extract width
+                    local value=$(get_${key} 2>/dev/null || echo "N/A")
+                    row_content+=$(printf "%-${width}s" "$key: $value")
+                done
+                echo "$row_content"
+            done
+        elif [[ "$metrics" == file:* ]]; then
+            # Handle file sections
+            local file_info=${metrics#file:}
+            local file_path=$(echo "$file_info" | cut -d':' -f1)
+            local lines=$(echo "$file_info" | cut -d':' -f2)
+            file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
+            display_file_content "$file_path" "$lines"
+        else
+            # Handle simple metrics
+            for metric in $metrics; do
                 local value=$(get_${metric} 2>/dev/null || echo "N/A")
                 printf "%-20s: %s\n" "$metric" "$value"
-            fi
-        done
+            done
+        fi
         echo ""
     done | while read -r line; do echo "$line"; done
 }
