@@ -15,8 +15,232 @@
 # Completed text box display optimization.
 # fixed some formatting issues
 # Timestamp: 202503221232 CST
-# Modular UI_SECTION framwork is working.  Still WIP but basics are solid
+# Modular UI_SECTION framework is working.  Still WIP but basics are solid
 
+# Default JSON configuration for UI_SECTIONS
+DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
+{
+    "Node_Status": {
+        "layout": [
+            {
+                "row": [
+                    {
+                        "metric": "node_version",
+                        "label": "Node Version",
+                        "width": 25
+                    },
+                    {
+                        "metric": "network_status",
+                        "label": "Network Status",
+                        "width": 25
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "connections_details",
+                        "label": "Connections",
+                        "width": 30
+                    },
+                    {
+                        "metric": "sync_status",
+                        "label": "Sync Status",
+                        "width": 20
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "node_uptime",
+                        "label": "Uptime",
+                        "width": 30
+                    },
+                    {
+                        "metric": "utc_time",
+                        "label": "UTC",
+                        "width": 30
+                    }
+                ]
+            }
+        ]
+    },
+    "Blockchain": {
+        "layout": [
+            {
+                "row": [
+                    {
+                        "metric": "blockchain_blocks",
+                        "label": "Block Height",
+                        "width": 30
+                    },
+                    {
+                        "metric": "difficulty",
+                        "label": "Difficulty",
+                        "width": 30
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "network_hashps",
+                        "label": "Hash Rate",
+                        "width": 30
+                    },
+                    {
+                        "metric": "mempool_info",
+                        "label": "Memory Pool",
+                        "width": 30
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "net_stake_weight",
+                        "label": "Net Stake Weight",
+                        "width": 60
+                    }
+                ]
+            }
+        ]
+    },
+    "Wallet": {
+        "layout": [
+            {
+                "row": [
+                    {
+                        "metric": "wallet_balance",
+                        "label": "Balance",
+                        "width": 30
+                    },
+                    {
+                        "metric": "wallet_status",
+                        "label": "Status",
+                        "width": 30
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "unconfirmed_balance",
+                        "label": "Unconfirmed Balance",
+                        "width": 30
+                    },
+                    {
+                        "metric": "highest_balance_address",
+                        "label": "Address",
+                        "width": 43
+                    }
+                ]
+            }
+        ]
+    },
+    "Staking": {
+        "layout": [
+            {
+                "row": [
+                    {
+                        "metric": "staking_status",
+                        "label": "Status",
+                        "width": 20
+                    },
+                    {
+                        "metric": "staking_info",
+                        "label": "Weight Ratio",
+                        "width": 40
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "last_stake_reward",
+                        "label": "Last Reward",
+                        "width": 30
+                    },
+                    {
+                        "metric": "expected_time",
+                        "label": "Expected Time",
+                        "width": 30
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "stake_report",
+                        "label": "Stake Report",
+                        "width": 30
+                    }
+                ]
+            }
+        ]
+    },
+    "System_Resources": {
+        "layout": [
+            {
+                "row": [
+                    {
+                        "metric": "disk_usage",
+                        "label": "Disk",
+                        "width": 30
+                    },
+                    {
+                        "metric": "cpu_usage",
+                        "label": "CPU",
+                        "width": 25
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "memory_usage",
+                        "label": "RAM",
+                        "width": 33
+                    },
+                    {
+                        "metric": "swap_memory",
+                        "label": "Swap",
+                        "width": 30
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "system_uptime",
+                        "label": "Uptime",
+                        "width": 30
+                    },
+                    {
+                        "metric": "load_averages",
+                        "label": "Load Avg",
+                        "width": 30
+                    }
+                ]
+            }
+        ]
+    },
+    "Debug_Log": {
+        "file": {
+            "path": "${HOME}/.pocketcoin/debug.log",
+            "lines": 5
+        }
+    },
+    "Probe_Nodes_Log": {
+        "file": {
+            "path": "${HOME}/probe_nodes/probe_nodes.log",
+            "lines": 5
+        }
+    }
+}
+EOF
+)
 
 # -----------------------------------------------------------------------------
 # Custom arguments for pocketcoin-cli
@@ -127,8 +351,8 @@ get_node_version() {
     echo "$version"
 }
 
-# Function to get network type
-get_network_type() {
+# Function to get network status
+get_network_status() {
     local active=$(echo "$NETWORK_INFO" | jq -r '.networkactive // "Unknown"' 2>/dev/null || echo "Unknown")
     if [[ "$active" == "true" ]]; then
         echo "Active"
@@ -168,11 +392,10 @@ get_block_info() {
     format_block_info "$blocks"
 }
 
-# Function to get blockchain info
-get_blockchain_info() {
-    local blocks=$(echo "$BLOCKCHAIN_INFO" | jq -r '.blocks // 0')
-    local headers=$(echo "$BLOCKCHAIN_INFO" | jq -r '.headers // 0')
-    echo "$blocks | $headers"
+# Function to get blockchain blocks
+get_blockchain_blocks() {
+    local blocks=$(echo "$BLOCKCHAIN_INFO" | jq -r '.blocks // 0') # Correctly retrieves blocks
+    echo "$blocks"
 }
 
 # Function to parse sync data
@@ -345,7 +568,7 @@ get_staking_weight() {
         percentage=$(echo "($weight * 100) / $netweight" | bc)
     fi
 
-    echo "Weight: $formatted_weight/$formatted_netweight ($percentage%)"
+    echo "$formatted_weight/$formatted_netweight ($percentage%)"
 }
 
 # Function to get the next stake time
@@ -373,7 +596,7 @@ get_next_stake_time() {
 get_staking_info() {
     local weight_info=$(get_staking_weight)
     local next_time=$(get_next_stake_time)
-    echo "$weight_info | Next: $next_time"
+    echo "$weight_info"
 }
 
 # Function to get last stake reward time
@@ -508,23 +731,31 @@ get_highest_balance_address() {
     echo "$highest_entry"
 }
 
-# Helper function to create a boxed section
+# Helper function to format label:value pairs with width enforcement and custom labels
+format_label_value() {
+    local label="$1"
+    local value="$2"
+    local width="$3"
+    local pair="${label}: ${value}"
+
+    # Truncate or pad the pair to fit within the specified width
+    if [ ${#pair} -gt "$width" ]; then
+        echo "${pair:0:$width}" # Truncate if too long
+    else
+        printf "%-${width}s" "$pair" # Pad with spaces if too short
+    fi
+}
+
+# Updated function to create a boxed section with proper width enforcement
 create_boxed_section() {
     local title="$1"
     shift
     local content=("$@")
     
-    # Calculate the maximum content width with extra padding for any special characters
+    # Calculate the maximum content width
     local max_content_width=0
     for line in "${content[@]}"; do
-        # Basic character count
         local line_width=$(echo -n "$line" | wc -m)
-        
-        # Add extra space for any line containing special characters
-        if [[ "$line" == *"↓"* || "$line" == *"↑"* ]]; then
-            line_width=$((line_width + 2))  # Add 2 extra spaces for safety
-        fi
-        
         if [ $line_width -gt $max_content_width ]; then
             max_content_width=$line_width
         fi
@@ -532,14 +763,10 @@ create_boxed_section() {
     
     # Calculate content line width including borders
     local full_line_width=$((max_content_width + 4)) # +4 for "│ " and " │"
-    
-    # Calculate internal width (without the border characters)
     local internal_width=$((full_line_width - 2))
     
     # Create the title part
     local title_part="─ $title "
-    
-    # Calculate remaining dashes needed after title
     local remaining_dashes=$((internal_width - ${#title_part}))
     
     # Top border with title
@@ -547,15 +774,10 @@ create_boxed_section() {
     
     # Content lines
     for line in "${content[@]}"; do
-        # Add extra padding specifically for lines with arrows
-        if [[ "$line" == *"↓"* || "$line" == *"↑"* ]]; then
-            printf "│ %-${max_content_width}s │\n" "$line  "  # Add extra spaces after content
-        else
-            printf "│ %-${max_content_width}s │\n" "$line"
-        fi
+        printf "│ %-${max_content_width}s │\n" "$line"
     done
     
-    # Bottom border - exactly matching the top border width
+    # Bottom border
     printf "└%s┘\n" "$(printf '─%.0s' $(seq 1 $internal_width))"
 }
 
@@ -640,10 +862,10 @@ display_file_content() {
     fi
 }
 
-# Refactored function to display compact UI (no boxes)
+# Updated function to display compact UI with proper width enforcement
 display_compact_ui() {
     local sections=$(echo "$UI_SECTIONS_JSON" | jq -r 'keys_unsorted[]') # Preserve JSON order
-    for section in $sections; do
+    while IFS= read -r section; do
         echo "-- $section --"
         local metrics=$(echo "$UI_SECTIONS_JSON" | jq -r --arg section "$section" '.[$section]')
         if echo "$metrics" | jq -e 'has("layout")' >/dev/null; then
@@ -654,9 +876,10 @@ display_compact_ui() {
                 local metrics=$(echo "$row" | jq -c '.row[]')
                 while IFS= read -r metric; do
                     local key=$(echo "$metric" | jq -r '.metric')
+                    local label=$(echo "$metric" | jq -r '.label // .metric') # Use label if provided, fallback to metric
                     local width=$(echo "$metric" | jq -r '.width')
                     local value=$(get_${key} 2>/dev/null || echo "N/A")
-                    row_content+=$(printf "%-${width}s" "$key: $value")
+                    row_content+=$(format_label_value "$label" "$value" "$width")"  "
                 done <<< "$metrics"
                 echo "$row_content"
             done <<< "$rows"
@@ -675,16 +898,16 @@ display_compact_ui() {
             done
         fi
         echo ""
-    done
+    done <<< "$sections"
 }
 
 # Main UI renderer
 render_ui() {
-    for section in "Node_Status" "Blockchain" "Wallet" "Staking" "System_Resources" "Debug_Log" "Probe_Nodes_Log"; do
+    local sections=$(echo "$UI_SECTIONS_JSON" | jq -r 'keys_unsorted[]') # Dynamically fetch section names
+    while IFS= read -r section; do
         render_section "$section" # Ensure section name is quoted
-    done | while read -r line; do echo "$line"; done
+    done <<< "$sections" | while read -r line; do echo "$line"; done
 }
-
 
 # Function to display metrics
 display_metrics() {
@@ -770,7 +993,65 @@ format_stake_count() {
 # Refactored function to get stake count
 get_stake_count() {
     local count=$(parse_stake_count)
-    format_stake_count "$count"
+    format_stake_count "$count" # Fixed syntax: removed parentheses
+}
+
+# Function to parse node uptime
+parse_node_uptime() {
+    pocketcoin-cli $POCKETCOIN_CLI_ARGS uptime 2>/dev/null || echo "0"
+}
+
+# Function to format node uptime
+format_node_uptime() {
+    local uptime_seconds="$1"
+    if [[ "$uptime_seconds" -eq 0 ]]; then
+        echo "N/A"
+    else
+        local days=$((uptime_seconds / 86400))
+        local hours=$(( (uptime_seconds % 86400) / 3600 ))
+        local minutes=$(( (uptime_seconds % 3600) / 60 ))
+        echo "${days}d ${hours}h ${minutes}m"
+    fi
+}
+
+# Refactored function to get node uptime
+get_node_uptime() {
+    local uptime_seconds=$(parse_node_uptime)
+    format_node_uptime "$uptime_seconds"
+}
+
+# Function to parse expected time
+parse_expected_time() {
+    echo "$STAKING_INFO" | jq -r '.expectedtime // 0' 2>/dev/null || echo "0"
+}
+
+# Function to format expected time
+format_expected_time() {
+    local expected_seconds="$1"
+    if [[ "$expected_seconds" -eq 0 ]]; then
+        echo "N/A"
+    else
+        if (( expected_seconds > 86400 )); then
+            local days=$(( expected_seconds / 86400 ))
+            local hours=$(( (expected_seconds % 86400) / 3600 ))
+            echo "~${days}d${hours}h"
+        elif (( expected_seconds > 3600 )); then
+            local hours=$(( expected_seconds / 3600 ))
+            local minutes=$(( (expected_seconds % 3600) / 60 ))
+            echo "~${hours}h${minutes}m"
+        elif (( expected_seconds > 0 )); then
+            local minutes=$(( expected_seconds / 60 ))
+            echo "~${minutes}m"
+        else
+            echo "unknown"
+        fi
+    fi
+}
+
+# Refactored function to get expected time
+get_expected_time() {
+    local expected_seconds=$(parse_expected_time)
+    format_expected_time "$expected_seconds"
 }
 
 # Parse command line arguments
@@ -785,52 +1066,6 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
-
-# Default JSON configuration for UI_SECTIONS
-DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
-{
-  "Node_Status": {
-    "layout": [
-      {"row": [{"metric": "node_version", "width": 20}, {"metric": "network_type", "width": 20}]},
-      {"row": [{"metric": "connections_details", "width": 25}, {"metric": "sync_status", "width": 15}]},
-      {"row": [{"metric": "node_uptime", "width": 25}, {"metric": "utc_time", "width": 15}]}
-    ]
-  },
-  "Blockchain": {
-    "layout": [
-      {"row": [{"metric": "block_info", "width": 30}, {"metric": "difficulty", "width": 20}]},
-      {"row": [{"metric": "network_hashps", "width": 25}, {"metric": "mempool_info", "width": 25}]},
-      {"row": [{"metric": "net_stake_weight", "width": 50}]}
-    ]
-  },
-  "Wallet": {
-    "layout": [
-      {"row": [{"metric": "wallet_balance", "width": 30}, {"metric": "wallet_status", "width": 20}]},
-      {"row": [{"metric": "unconfirmed_balance", "width": 25}, {"metric": "highest_balance_address", "width": 25}]}
-    ]
-  },
-  "Staking": {
-    "layout": [
-      {"row": [{"metric": "staking_status", "width": 20}, {"metric": "staking_info", "width": 40}]},
-      {"row": [{"metric": "last_stake_reward", "width": 30}, {"metric": "stake_report", "width": 30}]}
-    ]
-  },
-  "System_Resources": {
-    "layout": [
-      {"row": [{"metric": "disk_usage", "width": 30}, {"metric": "cpu_usage", "width": 20}]},
-      {"row": [{"metric": "memory_usage", "width": 25}, {"metric": "swap_memory", "width": 25}]},
-      {"row": [{"metric": "system_uptime", "width": 30}, {"metric": "load_averages", "width": 20}]}
-    ]
-  },
-  "Debug_Log": {
-    "file": {"path": "${HOME}/.pocketcoin/debug.log", "lines": 5}
-  },
-  "Probe_Nodes_Log": {
-    "file": {"path": "${HOME}/probe_nodes/probe_nodes.log", "lines": 5}
-  }
-}
-EOF
-)
 
 # Function to load UI_SECTIONS configuration
 load_ui_sections_config() {
@@ -859,7 +1094,7 @@ validate_ui_sections_json() {
     return 0
 }
 
-# Function to parse and render UI_SECTIONS
+# Updated function to parse and render UI_SECTIONS with optional labels
 parse_ui_sections() {
     local section_name="$1"
     local section_json=$(echo "$UI_SECTIONS_JSON" | jq -r --arg name "$section_name" '.[$name]')
@@ -877,9 +1112,10 @@ parse_ui_sections() {
             local metrics=$(echo "$row" | jq -c '.row[]')
             while IFS= read -r metric; do
                 local key=$(echo "$metric" | jq -r '.metric')
+                local label=$(echo "$metric" | jq -r '.label // .metric') # Use label if provided, fallback to metric
                 local width=$(echo "$metric" | jq -r '.width')
                 local value=$(get_${key} 2>/dev/null || echo "N/A")
-                row_content+=$(printf "%-${width}s" "$key: $value")
+                row_content+=$(format_label_value "$label" "$value" "$width")
             done <<< "$metrics"
             content_lines+=("$row_content")
         done <<< "$rows"
