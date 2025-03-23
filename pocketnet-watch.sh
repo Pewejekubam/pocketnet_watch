@@ -621,57 +621,10 @@ get_utc_time() {
     format_utc_time "$time"
 }
 
-# Updated UI_SECTIONS with row-column layout
-declare -A UI_SECTIONS
-UI_SECTIONS=(
-    ["Node Status"]="layout:row1[node_version:20,network_type:20]|row2[connections_details:25,sync_status:15]|row3[node_uptime:25,utc_time:15]"
-    ["Blockchain"]="layout:row1[block_info:30,difficulty:20]|row2[network_hashps:25,mempool_info:25]|row3[net_stake_weight:50]"
-    ["Wallet"]="layout:row1[wallet_balance:30,wallet_status:20]|row2[unconfirmed_balance:25,highest_balance_address:25]"
-    ["Staking"]="layout:row1[staking_status:20,staking_info:40]|row2[last_stake_reward:30,stake_report:30]"
-    ["System Resources"]="layout:row1[disk_usage:30,cpu_usage:20]|row2[memory_usage:25,swap_memory:25]|row3[system_uptime:30,load_averages:20]"
-    ["Debug Log"]="file:${HOME}/.pocketcoin/debug.log:5"
-    ["Probe Nodes Log"]="file:${HOME}/probe_nodes/probe_nodes.log:5"
-)
-
 # Updated render_section to handle row-column layout
 render_section() {
     local section_name="$1"
-    local metrics="${UI_SECTIONS[$section_name]}"
-
-    if [[ "$metrics" == layout:* ]]; then
-        # Handle layout sections
-        local layout="${metrics#layout:}"
-        local rows=(${layout//|/ })  # Split rows by '|'
-
-        local content_lines=()
-        for row in "${rows[@]}"; do
-            local row_content=""
-            local items="${row#row*[*}"  # Extract items inside brackets
-            items="${items%]*}"          # Remove trailing ']'
-            local metrics=(${items//,/ })  # Split metrics by ','
-
-            for metric in "${metrics[@]}"; do
-                local key="${metric%%:*}"  # Extract metric name
-                local width="${metric##*:}"  # Extract width
-                local value=$(get_${key} 2>/dev/null || echo "N/A")
-                row_content+=$(printf "%-${width}s" "$key: $value")
-            done
-            content_lines+=("$row_content")
-        done
-
-        create_boxed_section "$section_name" "${content_lines[@]}"
-    else
-        # Handle file sections
-        local file_info=${metrics#file:}
-        local file_path=$(echo "$file_info" | cut -d':' -f1)
-        local lines=$(echo "$file_info" | cut -d':' -f2)
-        file_path=$(eval echo "$file_path")
-        local content_lines=()
-        while read -r line; do
-            content_lines+=("$line")
-        done < <(display_file_content "$file_path" "$lines")
-        create_boxed_section "$section_name" "${content_lines[@]}"
-    fi
+    parse_ui_sections "$section_name"
 }
 
 # Generic function to display file content
@@ -689,50 +642,46 @@ display_file_content() {
 
 # Refactored function to display compact UI (no boxes)
 display_compact_ui() {
-    for section in "Node Status" "Blockchain" "Wallet" "Staking" "System Resources" "Debug Log" "Probe Nodes Log"; do
+    local sections=$(echo "$UI_SECTIONS_JSON" | jq -r 'keys_unsorted[]') # Preserve JSON order
+    for section in $sections; do
         echo "-- $section --"
-        local metrics="${UI_SECTIONS[$section]}"
-        if [[ "$metrics" == layout:* ]]; then
+        local metrics=$(echo "$UI_SECTIONS_JSON" | jq -r --arg section "$section" '.[$section]')
+        if echo "$metrics" | jq -e 'has("layout")' >/dev/null; then
             # Handle layout sections
-            local layout="${metrics#layout:}"
-            local rows=(${layout//|/ })  # Split rows by '|'
-
-            for row in "${rows[@]}"; do
+            local rows=$(echo "$metrics" | jq -c '.layout[]')
+            while IFS= read -r row; do
                 local row_content=""
-                local items="${row#row*[*}"  # Extract items inside brackets
-                items="${items%]*}"          # Remove trailing ']'
-                local metrics=(${items//,/ })  # Split metrics by ','
-
-                for metric in "${metrics[@]}"; do
-                    local key="${metric%%:*}"  # Extract metric name
-                    local width="${metric##*:}"  # Extract width
+                local metrics=$(echo "$row" | jq -c '.row[]')
+                while IFS= read -r metric; do
+                    local key=$(echo "$metric" | jq -r '.metric')
+                    local width=$(echo "$metric" | jq -r '.width')
                     local value=$(get_${key} 2>/dev/null || echo "N/A")
                     row_content+=$(printf "%-${width}s" "$key: $value")
-                done
+                done <<< "$metrics"
                 echo "$row_content"
-            done
-        elif [[ "$metrics" == file:* ]]; then
+            done <<< "$rows"
+        elif echo "$metrics" | jq -e 'has("file")' >/dev/null; then
             # Handle file sections
-            local file_info=${metrics#file:}
-            local file_path=$(echo "$file_info" | cut -d':' -f1)
-            local lines=$(echo "$file_info" | cut -d':' -f2)
+            local file_path=$(echo "$metrics" | jq -r '.file.path')
+            local lines=$(echo "$metrics" | jq -r '.file.lines')
             file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
             display_file_content "$file_path" "$lines"
         else
             # Handle simple metrics
-            for metric in $metrics; do
+            local simple_metrics=$(echo "$metrics" | jq -r 'keys[]')
+            for metric in $simple_metrics; do
                 local value=$(get_${metric} 2>/dev/null || echo "N/A")
                 printf "%-20s: %s\n" "$metric" "$value"
             done
         fi
         echo ""
-    done | while read -r line; do echo "$line"; done
+    done
 }
 
 # Main UI renderer
 render_ui() {
-    for section in "Node Status" "Blockchain" "Wallet" "Staking" "System Resources" "Debug Log" "Probe Nodes Log"; do
-        render_section "$section"
+    for section in "Node_Status" "Blockchain" "Wallet" "Staking" "System_Resources" "Debug_Log" "Probe_Nodes_Log"; do
+        render_section "$section" # Ensure section name is quoted
     done | while read -r line; do echo "$line"; done
 }
 
@@ -836,6 +785,133 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
+
+# Default JSON configuration for UI_SECTIONS
+DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
+{
+  "Node_Status": {
+    "layout": [
+      {"row": [{"metric": "node_version", "width": 20}, {"metric": "network_type", "width": 20}]},
+      {"row": [{"metric": "connections_details", "width": 25}, {"metric": "sync_status", "width": 15}]},
+      {"row": [{"metric": "node_uptime", "width": 25}, {"metric": "utc_time", "width": 15}]}
+    ]
+  },
+  "Blockchain": {
+    "layout": [
+      {"row": [{"metric": "block_info", "width": 30}, {"metric": "difficulty", "width": 20}]},
+      {"row": [{"metric": "network_hashps", "width": 25}, {"metric": "mempool_info", "width": 25}]},
+      {"row": [{"metric": "net_stake_weight", "width": 50}]}
+    ]
+  },
+  "Wallet": {
+    "layout": [
+      {"row": [{"metric": "wallet_balance", "width": 30}, {"metric": "wallet_status", "width": 20}]},
+      {"row": [{"metric": "unconfirmed_balance", "width": 25}, {"metric": "highest_balance_address", "width": 25}]}
+    ]
+  },
+  "Staking": {
+    "layout": [
+      {"row": [{"metric": "staking_status", "width": 20}, {"metric": "staking_info", "width": 40}]},
+      {"row": [{"metric": "last_stake_reward", "width": 30}, {"metric": "stake_report", "width": 30}]}
+    ]
+  },
+  "System_Resources": {
+    "layout": [
+      {"row": [{"metric": "disk_usage", "width": 30}, {"metric": "cpu_usage", "width": 20}]},
+      {"row": [{"metric": "memory_usage", "width": 25}, {"metric": "swap_memory", "width": 25}]},
+      {"row": [{"metric": "system_uptime", "width": 30}, {"metric": "load_averages", "width": 20}]}
+    ]
+  },
+  "Debug_Log": {
+    "file": {"path": "${HOME}/.pocketcoin/debug.log", "lines": 5}
+  },
+  "Probe_Nodes_Log": {
+    "file": {"path": "${HOME}/probe_nodes/probe_nodes.log", "lines": 5}
+  }
+}
+EOF
+)
+
+# Function to load UI_SECTIONS configuration
+load_ui_sections_config() {
+    local config_file="$1"
+    if [[ -f "$config_file" ]]; then
+        # Validate and load external JSON configuration
+        if jq empty "$config_file" 2>/dev/null; then
+            UI_SECTIONS_JSON=$(cat "$config_file")
+        else
+            echo "Invalid JSON in $config_file. Falling back to default configuration."
+            UI_SECTIONS_JSON="$DEFAULT_UI_SECTIONS_JSON"
+        fi
+    else
+        # Use default embedded configuration
+        UI_SECTIONS_JSON="$DEFAULT_UI_SECTIONS_JSON"
+    fi
+}
+
+# Function to validate JSON structure
+validate_ui_sections_json() {
+    local json="$1"
+    if ! echo "$json" | jq -e '.' >/dev/null 2>&1; then
+        echo "Invalid JSON structure."
+        return 1
+    fi
+    return 0
+}
+
+# Function to parse and render UI_SECTIONS
+parse_ui_sections() {
+    local section_name="$1"
+    local section_json=$(echo "$UI_SECTIONS_JSON" | jq -r --arg name "$section_name" '.[$name]')
+    if [[ -z "$section_json" || "$section_json" == "null" ]]; then
+        echo "Section '$section_name' not found in configuration."
+        return
+    fi
+
+    if echo "$section_json" | jq -e 'has("layout")' >/dev/null; then
+        # Handle layout sections
+        local rows=$(echo "$section_json" | jq -c '.layout[]')
+        local content_lines=()
+        while IFS= read -r row; do
+            local row_content=""
+            local metrics=$(echo "$row" | jq -c '.row[]')
+            while IFS= read -r metric; do
+                local key=$(echo "$metric" | jq -r '.metric')
+                local width=$(echo "$metric" | jq -r '.width')
+                local value=$(get_${key} 2>/dev/null || echo "N/A")
+                row_content+=$(printf "%-${width}s" "$key: $value")
+            done <<< "$metrics"
+            content_lines+=("$row_content")
+        done <<< "$rows"
+        create_boxed_section "$section_name" "${content_lines[@]}"
+    elif echo "$section_json" | jq -e 'has("file")' >/dev/null; then
+        # Handle file sections
+        local file_path=$(echo "$section_json" | jq -r '.file.path')
+        local lines=$(echo "$section_json" | jq -r '.file.lines')
+        file_path=$(eval echo "$file_path")
+        local content_lines=()
+        while IFS= read -r line; do
+            content_lines+=("$line")
+        done < <(display_file_content "$file_path" "$lines")
+        create_boxed_section "$section_name" "${content_lines[@]}"
+    fi
+}
+
+# Update render_section to use JSON-based configuration
+render_section() {
+    local section_name="$1"
+    parse_ui_sections "$section_name"
+}
+
+# Main script initialization
+CONFIG_FILE="${HOME}/.pocketnet_watch_config.json"
+load_ui_sections_config "$CONFIG_FILE"
+
+# Validate loaded configuration
+if ! validate_ui_sections_json "$UI_SECTIONS_JSON"; then
+    echo "Error: Invalid UI_SECTIONS configuration. Exiting."
+    exit 1
+fi
 
 # Main loop
 clear
