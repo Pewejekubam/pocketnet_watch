@@ -1322,8 +1322,8 @@
     ],
     [
       "PGmLB7ZAKJcPyNgTxMoR2nQ41yFs9VD6kW",
-      23433.70994076,
-      "conv-pocketcoin01"
+      433.70994076,
+      "my_main_wallet"
     ],
     [
       "PMzXY8QCFLmNaLwJvKpM4oO13xDs5RT7pL",

@@ -6,16 +6,9 @@
 # metrics and logs in a compact, organized UI. It retrieves information about
 # wallet balance, node status, blockchain details, staking info, and system
 # resources.
-# v0.4.6
-# Timestamp: 2025-03-20 0816 CST
-# Refining cache_pocketcoin_data function to reduce calls to pocketcoin-cli
-# Timestamp: 202503210736 CST
-# Finished cache optimization.  Tightening up label:value pairs display.
-# Timestamp: 202503201113 CST
-# Completed text box display optimization.
-# fixed some formatting issues
-# Timestamp: 202503221232 CST
-# Modular UI_SECTION framework is working.  Still WIP but basics are solid
+# v0.5.0
+# 202503251140CST
+
 
 # Default JSON configuration for UI_SECTIONS
 DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
@@ -27,12 +20,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "node_version",
                         "label": "Node Version",
-                        "width": 25
+                        "width": 32
                     },
                     {
-                        "metric": "network_status",
-                        "label": "Network Status",
-                        "width": 25
+                        "metric": "node_time",
+                        "label": "Node Time",
+                        "width": 34
                     }
                 ]
             },
@@ -41,7 +34,7 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "connections_details",
                         "label": "Connections",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "sync_status",
@@ -55,12 +48,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "node_uptime",
                         "label": "Uptime",
-                        "width": 30
+                        "width": 32
                     },
                     {
-                        "metric": "utc_time",
-                        "label": "UTC",
-                        "width": 30
+                        "metric": "network_status",
+                        "label": "Network Status",
+                        "width": 25
                     }
                 ]
             }
@@ -73,12 +66,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "blockchain_blocks",
                         "label": "Block Height",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "difficulty",
                         "label": "Difficulty",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             },
@@ -87,12 +80,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "network_hashps",
                         "label": "Hash Rate",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "mempool_info",
                         "label": "Memory Pool",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             },
@@ -114,12 +107,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "wallet_balance",
                         "label": "Balance",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "wallet_status",
                         "label": "Status",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             },
@@ -128,7 +121,7 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "unconfirmed_balance",
                         "label": "Unconfirmed Balance",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "highest_balance_address",
@@ -146,7 +139,7 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "staking_status",
                         "label": "Status",
-                        "width": 20
+                        "width": 32
                     },
                     {
                         "metric": "staking_info",
@@ -160,12 +153,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "last_stake_reward",
                         "label": "Last Reward",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "expected_time",
                         "label": "Expected Time",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             },
@@ -174,7 +167,16 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "stake_report",
                         "label": "Stake Report",
-                        "width": 30
+                        "width": 60
+                    }
+                ]
+            },
+            {
+                "row": [
+                    {
+                        "metric": "stake_wins",
+                        "label": "Stake Wins",
+                        "width": 32
                     }
                 ]
             }
@@ -187,7 +189,7 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "disk_usage",
                         "label": "Disk",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "cpu_usage",
@@ -201,12 +203,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "memory_usage",
                         "label": "RAM",
-                        "width": 33
+                        "width": 48
                     },
                     {
                         "metric": "swap_memory",
                         "label": "Swap",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             },
@@ -215,12 +217,12 @@ DEFAULT_UI_SECTIONS_JSON=$(cat <<'EOF'
                     {
                         "metric": "system_uptime",
                         "label": "Uptime",
-                        "width": 30
+                        "width": 32
                     },
                     {
                         "metric": "load_averages",
                         "label": "Load Avg",
-                        "width": 30
+                        "width": 32
                     }
                 ]
             }
@@ -244,15 +246,13 @@ EOF
 
 # -----------------------------------------------------------------------------
 # Custom arguments for pocketcoin-cli
-# Note: This can be an empty string if no custom arguments are needed.
+# Note: This argument can be an empty string if none are needed.
 # POCKETCOIN_CLI_ARGS="-rpcport=67530 -conf=/path/to/pocketnet/pocketcoin.conf"
 POCKETCOIN_CLI_ARGS=""
 # Configuration options
 USE_BOXED_UI=true     # Set to false for non-boxed UI
 REFRESH_SECONDS=5     # Time between screen refreshes
 CLEAR_CYCLES=15       # Clear screen every N cycles
-DEFAULT_BOX_WIDTH=80  # Default width for UI boxes
-PROBE_NODES_LOG_PATH="${HOME}/probe_nodes/probe_nodes.log" # Path to the probe_nodes.log file
 
 # Check for jq and bc installation
 if ! command -v jq &> /dev/null; then
@@ -269,6 +269,16 @@ fi
 format_with_commas() {
     local number=$1
     printf "%'d" "$number"
+}
+
+# Function to format numeric values with commas and up to 8 decimal places
+format_number_with_commas() {
+    local value="$1"
+    local integer_part=$(echo "$value" | cut -d'.' -f1)
+    local decimal_part=$(echo "$value" | cut -d'.' -f2 | cut -c1-8) # Limit to 8 decimal places
+    decimal_part=${decimal_part:-"00000000"} # Ensure at least 8 decimal places
+    local formatted_integer=$(format_with_commas "$integer_part")
+    echo "${formatted_integer}.${decimal_part}"
 }
 
 # Function to parse wallet balance
@@ -300,10 +310,7 @@ format_wallet_balance() {
 # Refactored function to get wallet balance
 get_wallet_balance() {
     local sql_balance=$(parse_wallet_balance)
-    local balance_parts=$(calculate_wallet_balance "$sql_balance")
-    local balance_integer=$(echo "$balance_parts" | awk '{print $1}')
-    local balance_decimal=$(echo "$balance_parts" | awk '{print $2}')
-    format_wallet_balance "$balance_integer" "$balance_decimal"
+    echo "$(format_number_with_commas "$sql_balance")"
 }
 
 # Function to get wallet info
@@ -342,18 +349,35 @@ get_wallet_status() {
     echo "$status"
 }
 
-# Function to get node version
-get_node_version() {
-    local version=$(echo "$GETINFO" | jq -r '.version // "Unknown"' 2>/dev/null || echo "Unknown")
-    if [[ "$version" != "Unknown" ]]; then
-        version=$(printf "v%s" "$version")
-    fi
-    echo "$version"
+# Refactored function to parse node version
+parse_node_version() {
+    echo "$GETINFO" | jq -r '.version // "Unknown"' 2>/dev/null || echo "Unknown"
 }
 
-# Function to get network status
-get_network_status() {
-    local active=$(echo "$NETWORK_INFO" | jq -r '.networkactive // "Unknown"' 2>/dev/null || echo "Unknown")
+# Refactored function to format node version
+format_node_version() {
+    local version="$1"
+    if [[ "$version" != "Unknown" ]]; then
+        printf "v%s" "$version"
+    else
+        echo "$version"
+    fi
+}
+
+# Refactored function to get node version
+get_node_version() {
+    local raw_version=$(parse_node_version)
+    format_node_version "$raw_version"
+}
+
+# Refactored function to parse network status
+parse_network_status() {
+    echo "$NETWORK_INFO" | jq -r '.networkactive // "Unknown"' 2>/dev/null || echo "Unknown"
+}
+
+# Refactored function to format network status
+format_network_status() {
+    local active="$1"
     if [[ "$active" == "true" ]]; then
         echo "Active"
     elif [[ "$active" == "false" ]]; then
@@ -361,6 +385,12 @@ get_network_status() {
     else
         echo "Unknown"
     fi
+}
+
+# Refactored function to get network status
+get_network_status() {
+    local raw_status=$(parse_network_status)
+    format_network_status "$raw_status"
 }
 
 # Function to calculate connections details
@@ -398,7 +428,7 @@ get_blockchain_blocks() {
     echo "$blocks"
 }
 
-# Function to parse sync data
+# Refactored function to parse sync data
 parse_sync_data() {
     local blocks=$(echo "$BLOCKCHAIN_INFO" | jq -r '.blocks // 0')
     local headers=$(echo "$BLOCKCHAIN_INFO" | jq -r '.headers // 0')
@@ -418,7 +448,7 @@ calculate_sync_percentage() {
     fi
 }
 
-# Function to format sync status
+# Refactored function to format sync status
 format_sync_status() {
     local percentage="$1"
     if [[ "$percentage" == "Unknown" ]]; then
@@ -466,13 +496,14 @@ format_difficulty() {
     fi
 }
 
-# Refactored function to get difficulty
+# Function to get difficulty
 get_difficulty() {
-    local diff=$(parse_difficulty)
-    local diff_parts=$(calculate_difficulty "$diff")
-    local diff_integer=$(echo "$diff_parts" | awk '{print $1}')
-    local diff_decimal=$(echo "$diff_parts" | awk '{print $2}')
-    format_difficulty "$diff_integer" "$diff_decimal"
+    local diff=$(echo "$STAKING_INFO" | jq -r '.difficulty // "Unknown"' 2>/dev/null || echo "Unknown")
+    if [[ "$diff" != "Unknown" ]]; then
+        echo "$(format_number_with_commas "$diff")"
+    else
+        echo "Unknown"
+    fi
 }
 
 # Function to parse network hashrate
@@ -538,14 +569,25 @@ get_stake_time() {
     echo "$STAKING_INFO" | jq -r '.["stake-time"]' || echo "Unknown"
 }
 
-# Function to get staking status
-get_staking_status() {
-    local status=$(echo "$STAKING_INFO" | jq -r '.staking // false')
+# Refactored function to parse staking status
+parse_staking_status() {
+    echo "$STAKING_INFO" | jq -r '.staking // false' 2>/dev/null || echo "false"
+}
+
+# Refactored function to format staking status
+format_staking_status() {
+    local status="$1"
     if [[ "$status" == "true" ]]; then
         echo "TRUE"
     else
         echo "FALSE"
     fi
+}
+
+# Refactored function to get staking status
+get_staking_status() {
+    local raw_status=$(parse_staking_status)
+    format_staking_status "$raw_status"
 }
 
 # Function to get staking weight and net weight
@@ -601,7 +643,7 @@ get_staking_info() {
 
 # Function to get last stake reward time
 get_last_stake_reward() {
-    local last_stake_time=$(echo "$STAKE_REPORT" | jq -r '."Latest Time" // "0"')
+    local last_stake_time=$(echo "$stake_wins" | jq -r '."Latest Time" // "0"')
     
     if [[ -z "$last_stake_time" || "$last_stake_time" == "0" ]]; then
         echo "Never"
@@ -619,7 +661,8 @@ get_last_stake_reward() {
 get_net_stake_weight() {
     local netweight=$(echo "$STAKING_INFO" | jq -r '.netstakeweight // 0' 2>/dev/null || echo "0")
     if [[ "$netweight" -gt 0 ]]; then
-        echo "$(format_with_commas "$netweight")"
+        local coins=$(echo "scale=8; $netweight / 100000000" | bc)
+        echo "$(format_number_with_commas "$coins")"
     else
         echo "Unknown"
     fi
@@ -658,9 +701,13 @@ get_free_memory() {
 }
 
 # Function to get stake report
-get_stake_report() {
-    local report=$(echo "$STAKE_REPORT" | jq -r '."Stake counted" // "Unknown"' 2>/dev/null || echo "Unknown")
-    echo "$report"
+get_stake_wins() {
+    local wins=$(echo "$STAKE_REPORT" | jq -r '."Stake counted" // "Unknown"' 2>/dev/null || echo "Unknown")
+    if [[ "$wins" != "Unknown" ]]; then
+        echo "$(format_with_commas "$wins")"
+    else
+        echo "Unknown"
+    fi
 }
 
 # Function to get node uptime
@@ -724,11 +771,13 @@ get_memory_usage() {
 
 # Function to get the highest balance wallet address
 get_highest_balance_address() {
-    local highest_entry=$(echo "$LISTADDRESSGROUPINGS" | jq -r '.[0][0] // "Unknown"' 2>/dev/null || echo "Unknown")
-    if [[ "$highest_entry" == "["* ]]; then
-        highest_entry=$(echo "$highest_entry" | jq -r '.[0]' 2>/dev/null || echo "Unknown")
+    local highest_entry=$(echo "$LISTADDRESSGROUPINGS" | jq -r '.[0][] | select(.[1] != null) | .[0] as $address | .[1] as $balance | [$address, $balance] | @csv' 2>/dev/null | sort -t, -k2 -nr | head -n 1)
+    if [[ -z "$highest_entry" ]]; then
+        echo "Unknown"
+    else
+        local address=$(echo "$highest_entry" | awk -F',' '{print $1}' | tr -d '"')
+        echo "$address"
     fi
-    echo "$highest_entry"
 }
 
 # Helper function to format label:value pairs with width enforcement and custom labels
@@ -826,21 +875,21 @@ get_load_averages() {
     format_load_averages "$load_averages"
 }
 
-# Function to parse UTC time
-parse_utc_time() {
+# Function to parse node time (updated from parse_utc_time)
+parse_node_time() {
     date -u +"%Y-%m-%d %H:%M:%S"
 }
 
-# Function to format UTC time
-format_utc_time() {
+# Function to format node time (updated from format_utc_time)
+format_node_time() {
     local time="$1"
     echo "${time} UTC"
 }
 
-# Refactored function to get UTC time
-get_utc_time() {
-    local time=$(parse_utc_time)
-    format_utc_time "$time"
+# Refactored function to get node time (updated from get_utc_time)
+get_node_time() {
+    local time=$(parse_node_time)
+    format_node_time "$time"
 }
 
 # Updated render_section to handle row-column layout
@@ -922,19 +971,34 @@ display_metrics() {
 display_help() {
     echo "Pocketnet Watch Script - Enhanced Version"
     echo ""
+    echo "This script monitors the status of a Pocketnet node and displays various"
+    echo "metrics in a user-friendly UI. It retrieves information about wallet balance,"
+    echo "node status, blockchain details, staking info, and system resources."
+    echo ""
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -h, --help        Display this help message"
-    echo "  -b, --boxed       Use boxed UI (default: enabled)"
-    echo "  -c, --compact     Use compact UI without boxes"
-    echo "  -r, --refresh N   Set refresh interval to N seconds (default: 5)"
-    echo "  --clear N         Clear screen every N cycles (default: 15)"
+    echo "  -h, --help        Display this help message and exit."
+    echo "  -b, --boxed       Use boxed UI with borders (default: enabled)."
+    echo "  -c, --compact     Use compact UI without borders (overrides --boxed)."
+    echo "  -r, --refresh N   Set the refresh interval to N seconds (default: 5)."
+    echo "  --clear N         Clear the screen every N refresh cycles (default: 15)."
     echo ""
     echo "Configuration:"
     echo "  The 'POCKETCOIN_CLI_ARGS' variable can be edited directly in the script"
     echo "  to pass custom arguments to the 'pocketcoin-cli' command. For example:"
     echo "      POCKETCOIN_CLI_ARGS=\"-rpcport=67530 -conf=/path/to/pocketcoin.conf\""
+    echo ""
+    echo "Dependencies:"
+    echo "  - jq: JSON processor (required)."
+    echo "  - bc: Command-line calculator (required)."
+    echo ""
+    echo "Examples:"
+    echo "  Run with default settings:"
+    echo "      $0"
+    echo ""
+    echo "  Run with compact UI and a 10-second refresh interval:"
+    echo "      $0 --compact --refresh 10"
     echo ""
     exit 0
 }
@@ -974,14 +1038,14 @@ cache_pocketcoin_data() {
     if (( counter % 3 == 0 )); then
         WALLET_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getwalletinfo 2>/dev/null || echo "{}")
         STAKING_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakinginfo 2>/dev/null || echo "{}")
-        STAKE_REPORT=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}")
+        STAKE_REPORT=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}") # Fix variable name
         LISTADDRESSGROUPINGS=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS listaddressgroupings 2>/dev/null || echo "[]")
     fi
 }
 
 # Function to parse stake count
 parse_stake_count() {
-    echo "$STAKE_REPORT" | jq -r '."Stake counted"' || echo "0"
+    echo "$stake_wins" | jq -r '."Stake counted"' || echo "0"
 }
 
 # Function to format stake count
@@ -993,7 +1057,7 @@ format_stake_count() {
 # Refactored function to get stake count
 get_stake_count() {
     local count=$(parse_stake_count)
-    format_stake_count "$count" # Fixed syntax: removed parentheses
+    format_stake_count "$count"
 }
 
 # Function to parse node uptime
@@ -1052,6 +1116,30 @@ format_expected_time() {
 get_expected_time() {
     local expected_seconds=$(parse_expected_time)
     format_expected_time "$expected_seconds"
+}
+
+# Function to format staking report
+format_stake_report() {
+    local report="$1"
+    local last_24h=$(echo "$report" | jq -r '."Last 24H" // null')
+    local last_7d=$(echo "$report" | jq -r '."Last 7 Days" // null')
+    local last_30d=$(echo "$report" | jq -r '."Last 30 Days" // null')
+    local last_365d=$(echo "$report" | jq -r '."Last 365 Days" // null')
+
+    # Format each value to two decimal places with commas if it exists
+    local formatted_report=""
+    [[ "$last_24h" != "null" ]] && formatted_report+="1D: $(printf "%'.2f" "$last_24h")"
+    [[ "$last_7d" != "null" ]] && formatted_report+=" | 7D: $(printf "%'.2f" "$last_7d")"
+    [[ "$last_30d" != "null" ]] && formatted_report+=" | 30D: $(printf "%'.2f" "$last_30d")"
+    [[ "$last_365d" != "null" ]] && formatted_report+=" | 1Y: $(printf "%'.2f" "$last_365d")"
+
+    echo "$formatted_report"
+}
+
+# Refactored function to get stake report
+get_stake_report() {
+    local report=$(echo "$STAKE_REPORT" | jq -r '.' 2>/dev/null || echo "{}")
+    format_stake_report "$report"
 }
 
 # Parse command line arguments
@@ -1121,10 +1209,10 @@ parse_ui_sections() {
         done <<< "$rows"
         create_boxed_section "$section_name" "${content_lines[@]}"
     elif echo "$section_json" | jq -e 'has("file")' >/dev/null; then
-        # Handle file sections
+        # Handle file sections``
         local file_path=$(echo "$section_json" | jq -r '.file.path')
         local lines=$(echo "$section_json" | jq -r '.file.lines')
-        file_path=$(eval echo "$file_path")
+        file_path=$(eval echo "$file_path")  # Expand ${HOME} or other variables
         local content_lines=()
         while IFS= read -r line; do
             content_lines+=("$line")
@@ -1141,7 +1229,7 @@ render_section() {
 
 # Main script initialization
 CONFIG_FILE="${HOME}/.pocketnet_watch_config.json"
-load_ui_sections_config "$CONFIG_FILE"
+load_ui_sections_config "$CONFIG_FILE" # Fix syntax by removing parentheses
 
 # Validate loaded configuration
 if ! validate_ui_sections_json "$UI_SECTIONS_JSON"; then
@@ -1156,7 +1244,7 @@ echo ""
 echo "Running initial checks and commands:"
 echo " - Checking jq installation... OK"
 echo " - Running pocketcoin-cli getstakereport..."
-STAKE_REPORT=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}")
+stake_wins=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getstakereport 2>/dev/null || echo "{}")
 echo " - Running pocketcoin-cli getblockchaininfo..."
 BLOCKCHAIN_INFO=$(pocketcoin-cli $POCKETCOIN_CLI_ARGS getblockchaininfo 2>/dev/null || echo "{}")
 echo " - Running pocketcoin-cli getnetworkinfo..."
